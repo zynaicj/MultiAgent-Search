@@ -25,7 +25,11 @@ sys.path.insert(0, str(project_root))
 
 # Import agent runner and monitor
 # 注意：agent.main_agent 导入时会初始化 main_agent，这可能需要几秒钟
-from agent.main_agent import run_deep_agent
+from agent.main_agent import (
+    run_deep_agent,
+    init_main_agent,
+    close_main_agent,
+)
 from api.monitor import manager
 
 app = FastAPI(title="DeepAgents API")
@@ -67,14 +71,16 @@ class TaskRequest(BaseModel):
     query: str
     thread_id: str = None
 
+
 @app.on_event("startup")
 async def startup_event():
-    """
-    服务启动时，获取当前运行的事件循环，并绑定到 WebSocket 管理器。
-    确保后台线程能通过 run_coroutine_threadsafe 准确投递消息。
-    """
     loop = asyncio.get_running_loop()
+
     manager.set_loop(loop)
+
+    # 在 FastAPI 的 event loop 中初始化异步 Checkpointer
+    await init_main_agent()
+
     print(f"[Server] WebSocket Manager bound to loop: {id(loop)}")
 
 
@@ -89,6 +95,10 @@ async def run_task(request: TaskRequest):
 
     # 3. [立即响应]
     return {"status": "started", "thread_id": thread_id}
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_main_agent()
 
 
 @app.post("/api/upload")

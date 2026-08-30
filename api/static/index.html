@@ -11,7 +11,7 @@
     --bg: #0f1117; --panel: #161822; --border: #252836; --text: #e1e4ed;
     --text-dim: #7b8198; --accent: #6366f1; --accent-glow: rgba(99,102,241,.18);
     --green: #22c55e; --green-bg: rgba(34,197,94,.12);
-    --blue: #3b82f6; --blue-bg: rgba(59,130,246,.12);
+    --blue: #3b82f6; --blue-bg: rgba(59,130,246,.12);function downloadFile(p)
     --orange: #f59e0b; --orange-bg: rgba(245,158,11,.12);
     --red: #ef4444; --red-bg: rgba(239,68,68,.12);
     --purple: #a855f7; --purple-bg: rgba(168,85,247,.12);
@@ -455,7 +455,9 @@ function fmtSize(b) {
   return b.toFixed(i > 0 ? 1 : 0) + ' ' + u[i];
 }
 function iconFor(n) { if (n.endsWith('.md')) return '📝'; if (n.endsWith('.pdf')) return '📄'; return '📎'; }
-function downloadFile(p) { window.open(`/api/download?path=${encodeURIComponent(p)}`,'_blank'); }
+function downloadFile(p) {
+    window.open(`/api/download?path=${p}`, '_blank');
+}
 
 // ── 键盘 ──
 $('#queryInput').addEventListener('keydown', e => {

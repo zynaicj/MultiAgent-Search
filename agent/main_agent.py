@@ -1,8 +1,7 @@
 from agent.subagents.knowledge_base_agent import knowledge_base_agent
 from agent.subagents.database_query_agent import database_query_agent
 from agent.subagents.network_search_agent import network_search_agent
-from langgraph.checkpoint.sqlite import SqliteSaver
-import sqlite3
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # main_agent tool导入
 from tools.markdown_tools import generate_markdown
@@ -24,24 +23,58 @@ from api.context import set_session_context, reset_session_context, set_thread_c
 
 from langchain_core.messages import AIMessage
 
-# 持久化 checkpoint：使用 SQLite 替代内存存储
-# 服务重启后对话历史不丢失，支持多轮对话上下文
 checkpoint_db_path = Path(__file__).parents[1] / "data" / "checkpoints.db"
 checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
-_conn = sqlite3.connect(str(checkpoint_db_path), check_same_thread=False)
-checkpointer = SqliteSaver(_conn)
 
-main_agent = create_deep_agent(
-   model = model,
-   system_prompt=main_agent_content['system_prompt'],
-   tools= [generate_markdown,convert_md_to_pdf,read_file_content],
-   checkpointer=checkpointer,
-   subagents=[
-       database_query_agent,
-       network_search_agent,
-       knowledge_base_agent
-   ]
-)
+# AsyncSqliteSaver 必须在正在运行的 event loop 中创建，
+# 因此不能像原来的 SqliteSaver 一样在模块导入时直接初始化。
+_checkpointer_context = None
+checkpointer = None
+main_agent = None
+
+
+async def init_main_agent():
+    """初始化异步 SQLite Checkpointer 和 Main Agent。"""
+    global _checkpointer_context, checkpointer, main_agent
+
+    if main_agent is not None:
+        return main_agent
+
+    _checkpointer_context = AsyncSqliteSaver.from_conn_string(
+        str(checkpoint_db_path)
+    )
+
+    checkpointer = await _checkpointer_context.__aenter__()
+
+    main_agent = create_deep_agent(
+        model=model,
+        system_prompt=main_agent_content["system_prompt"],
+        tools=[
+            generate_markdown,
+            convert_md_to_pdf,
+            read_file_content,
+        ],
+        checkpointer=checkpointer,
+        subagents=[
+            database_query_agent,
+            network_search_agent,
+            knowledge_base_agent,
+        ],
+    )
+
+    return main_agent
+
+
+async def close_main_agent():
+    """关闭 SQLite 异步连接。"""
+    global _checkpointer_context, checkpointer, main_agent
+
+    if _checkpointer_context is not None:
+        await _checkpointer_context.__aexit__(None, None, None)
+
+    _checkpointer_context = None
+    checkpointer = None
+    main_agent = None
 
 # 执行
 """
@@ -105,6 +138,8 @@ async def run_deep_agent(task_query,session_id):
 
     monitor.report_session_dir(session_dir_str)  # 当前会话对应的文件夹地址推送给起前端！
 
+    agent = await init_main_agent()
+
     # 执行main_agent
     config = {
         "configurable":{
@@ -127,13 +162,17 @@ async def run_deep_agent(task_query,session_id):
     # 反馈结果
     try:
         # 执行
-        async for chunk in main_agent.astream({
-            "messages":[
-                {
-                    "role":"user","content":task_query+path_instruction
-                }
-            ]
-        },config=config):
+        async for chunk in agent.astream(
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": task_query + path_instruction
+                    }
+                ]
+            },
+            config=config
+        ):
             # {"model [大模型决定调用工具 子智能体  最终结果] / tools" : {messages:[xxx...]}}
             for node_name,state in chunk.items():
                 if not state or "messages" not in state: continue

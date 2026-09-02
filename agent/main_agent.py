@@ -91,6 +91,124 @@ async def close_main_agent():
 
 project_root_path = Path(__file__).parents[1].resolve() # 绝对 解析路径标识以及软连接
 # project_root_path = Path(__file__).parents[1].absolute() # 绝对
+
+def _is_markdown_requested(task_query: str) -> bool:
+    """判断用户是否明确要求生成 Markdown 文件。"""
+    query = task_query.lower()
+
+    # 明确否定时，不认为用户要求生成 Markdown
+    negative_phrases = (
+        "不要生成md",
+        "不要生成 md",
+        "不要生成markdown",
+        "不要生成 markdown",
+        "无需生成md",
+        "不需要生成md",
+        "不要生成文件",
+    )
+    if any(phrase in query for phrase in negative_phrases):
+        return False
+
+    markdown_markers = (
+        "markdown",
+        "md文档",
+        "md文件",
+        ".md",
+    )
+
+    action_markers = (
+        "生成",
+        "保存",
+        "导出",
+        "下载",
+        "总结成",
+        "整理成",
+        "写成",
+        "转成",
+    )
+
+    return (
+        any(marker in query for marker in markdown_markers)
+        and any(action in query for action in action_markers)
+    )
+
+
+def _snapshot_markdown_files(session_dir: Path) -> dict[str, int]:
+    """记录当前 session 已有 Markdown 文件及其修改时间。"""
+    snapshot = {}
+
+    for file_path in session_dir.rglob("*.md"):
+        if file_path.is_file():
+            snapshot[str(file_path.resolve())] = file_path.stat().st_mtime_ns
+
+    return snapshot
+
+
+def _has_new_or_updated_markdown(
+    session_dir: Path,
+    before_snapshot: dict[str, int]
+) -> bool:
+    """检查本轮任务是否真正新建或更新了 Markdown 文件。"""
+    for file_path in session_dir.rglob("*.md"):
+        if not file_path.is_file():
+            continue
+
+        file_key = str(file_path.resolve())
+        current_mtime = file_path.stat().st_mtime_ns
+
+        # 新文件
+        if file_key not in before_snapshot:
+            return True
+
+        # 原文件在本轮被重新写入
+        if current_mtime > before_snapshot[file_key]:
+            return True
+
+    return False
+
+
+def _handle_agent_chunk(chunk):
+    """处理 Agent 流式状态：监控子 Agent 调用，并提取最终文本。"""
+    final_content = None
+
+    for node_name, state in chunk.items():
+        if not state or "messages" not in state:
+            continue
+
+        messages = state["messages"]
+
+        if not messages or not isinstance(messages, list):
+            continue
+
+        last_msg = messages[-1]
+
+        if node_name != "model":
+            continue
+
+        tool_calls = getattr(last_msg, "tool_calls", None)
+
+        if tool_calls:
+            for tool_call in tool_calls:
+                if tool_call.get("name") == "task":
+                    args = tool_call.get("args", {})
+
+                    monitor.report_assistant(
+                        args.get("subagent_type", "未知子智能体"),
+                        {
+                            "description":
+                                args.get("description", "")
+                        }
+                    )
+
+        elif getattr(last_msg, "content", None):
+            final_content = last_msg.content
+
+    return final_content
+
+
+
+
+
 # main_agent.invoke()
 # main_agent.stream()
 # main_agent.astream() [选他]
@@ -159,9 +277,21 @@ async def run_deep_agent(task_query,session_id):
     3. 使用相对路径，禁止使用绝对路径
     4. 若存在上传文件，请先分析内容
     """
+
+    # 判断用户是否明确要求生成 Markdown
+    markdown_requested = _is_markdown_requested(task_query)
+
+    # 记录 Agent 执行前已经存在的 Markdown 文件，
+    # 防止把旧文件误认为本轮新生成的文件
+    markdown_before = _snapshot_markdown_files(session_dir)
+
+    # 暂存 Main Agent 最后一次文本回答
+    final_content = None
+
+
     # 反馈结果
     try:
-        # 执行
+        # ==================== 第一次正常执行 Agent ====================
         async for chunk in agent.astream(
             {
                 "messages": [
@@ -173,37 +303,97 @@ async def run_deep_agent(task_query,session_id):
             },
             config=config
         ):
-            # {"model [大模型决定调用工具 子智能体  最终结果] / tools" : {messages:[xxx...]}}
-            for node_name,state in chunk.items():
-                if not state or "messages" not in state: continue
-                messages = state["messages"]
-                if messages and isinstance(messages,list):
-                    last_msg = messages[-1]
-                    if node_name == 'model':
-                        if last_msg.tool_calls:
-                            # 工具和子智能体
-                            for tool_call in last_msg.tool_calls:
-                                """
-                                  tool_call = {
-                                      name: task
-                                      args:{
-                                          subagent_type:子智能体的名字
-                                          description:子智能体的描述
-                                      }
-                                  }                                
-                                """
-                                if tool_call['name'] == 'task':
-                                    # 调用某个子智能体
-                                    monitor.report_assistant(tool_call['args']['subagent_type'],{'description':tool_call['args']['description']})
-                        elif last_msg.content:
-                            # 最终结果
-                            print(f"主智能体执行结果，最终结果：{last_msg.content[:100]}")
-                            monitor.report_task_result(last_msg.content)
+            chunk_final_content = _handle_agent_chunk(chunk)
 
-    except Exception as e :
-        # 报错推送错误信息给前端
-        monitor._emit("error",f"执行主智能发生异常信息：{str(e)}")
+            if chunk_final_content:
+                final_content = chunk_final_content
+
+
+        # ==================== Markdown 产物后置校验 ====================
+        if (
+            markdown_requested
+            and not _has_new_or_updated_markdown(
+                session_dir,
+                markdown_before
+            )
+        ):
+            print(
+                "检测到用户明确要求生成 Markdown，"
+                "但本轮未检测到真实 .md 文件，开始执行一次自动补救。"
+            )
+
+            repair_prompt = f"""
+    系统后置校验发现：
+
+    用户原始请求明确要求生成 Markdown 文件，
+    但当前工作目录中没有检测到本轮实际新生成或更新的 .md 文件。
+
+    请基于本轮已经获取和整理好的全部信息，
+    立即调用 generate_markdown 工具生成真实的 Markdown 文件。
+
+    要求：
+    1. 必须实际调用 generate_markdown 工具；
+    2. 不要只在文字中声称“文档已生成”；
+    3. 不需要重新搜索已经获得的信息；
+    4. Markdown 内容必须真正满足用户原始请求；
+    5. 工作目录仍然是：{relative_session_dir_str}
+
+    生成完成后，只需要简短确认文档已经生成。
+    """
+
+            # 使用同一个 thread_id 再执行一轮，
+            # 这样 Main Agent 可以继续利用前一轮已有上下文
+            async for chunk in agent.astream(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": repair_prompt
+                        }
+                    ]
+                },
+                config=config
+            ):
+                chunk_final_content = _handle_agent_chunk(chunk)
+
+                if chunk_final_content:
+                    final_content = chunk_final_content
+
+
+        # ==================== 最终强校验 ====================
+        if (
+            markdown_requested
+            and not _has_new_or_updated_markdown(
+                session_dir,
+                markdown_before
+            )
+        ):
+            monitor._emit(
+                "error",
+                "用户明确要求生成 Markdown，"
+                "但自动补救后仍未检测到真实 .md 文件，"
+                "本次任务不标记为完成。"
+            )
+            return
+
+
+        # ==================== 真正完成任务 ====================
+        if final_content:
+            print(
+                f"主智能体执行结果，最终结果："
+                f"{final_content[:100]}"
+            )
+            monitor.report_task_result(final_content)
+
+    except Exception as e:
+        monitor._emit(
+            "error",
+            f"执行主智能发生异常信息：{str(e)}"
+        )
+
     finally:
-        # 释放存储的地址和session_id
-        reset_session_context(session_dir_token, session_id_token)
+        reset_session_context(
+            session_dir_token,
+            session_id_token
+        )
 

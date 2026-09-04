@@ -221,6 +221,16 @@ const tagMap = {
 };
 
 function createSession(threadId, query) {
+  let resolveReady;
+  let rejectReady;
+  // 修改：记录服务端是否已经确认 WebSocket 注册完成
+  let wsReady = false;
+
+  const readyPromise = new Promise((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+  });
+
   const session = {
     id: threadId,
     query,
@@ -229,6 +239,8 @@ function createSession(threadId, query) {
     dir: null,
     status: 'running', // running | done | error
     el: null,
+    // 等待服务端确认 WebSocket 已注册完成
+    readyPromise,
   };
   sessions[threadId] = session;
 
@@ -236,37 +248,95 @@ function createSession(threadId, query) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/ws/${threadId}`;
   const ws = new WebSocket(url);
-  ws.onopen = () => { updateWSStatus(); };
+
+  // 修改：把 WebSocket 对象保存到当前 session
+  session.ws = ws;
+
+  ws.onopen = () => {
+      updateWSStatus();
+  };
   ws.onmessage = (e) => {
-    try {
-      const d = JSON.parse(e.data);
-      if (d.type === 'pong') return;
-      if (d.type !== 'monitor_event') return;
+      try {
+          const d = JSON.parse(e.data);
 
-      session.logs.push({ event: d.event, message: d.message, data: d.data, timestamp: d.timestamp });
-      if (d.event === 'session_created' && d.data?.path) {
-        session.dir = d.data.path;
-        scheduleFileRefresh();
-      }
-      if (d.event === 'task_result') { session.status = 'done'; scheduleFileRefresh(); }
-      if (d.event === 'error') { session.status = 'error'; }
+          if (d.type === 'ws_ready') {
+              // 修改：说明服务端 active_connections 已经注册完成
+              wsReady = true;
 
-      renderTabs();
-      if (activeSessionId === threadId) renderLog(session);
-    } catch (_) {}
+              resolveReady();
+              updateWSStatus();
+              return;
+          }
+
+          if (d.type === 'pong') return;
+          if (d.type !== 'monitor_event') return;
+
+          session.logs.push({
+              event: d.event,
+              message: d.message,
+              data: d.data,
+              timestamp: d.timestamp
+          });
+
+          if (
+              d.event === 'session_created'
+              && d.data?.path
+          ) {
+              session.dir = d.data.path;
+              scheduleFileRefresh();
+          }
+
+          if (d.event === 'task_result') {
+              session.status = 'done';
+              scheduleFileRefresh();
+          }
+
+          if (d.event === 'error') {
+              session.status = 'error';
+          }
+
+          renderTabs();
+
+          if (activeSessionId === threadId) {
+              renderLog(session);
+          }
+
+      } catch (_) {}
   };
   ws.onclose = () => {
-    if (session.status === 'running') session.status = 'done';
+    // 如果 WebSocket 还没有收到服务端的 ws_ready
+    // 就已经断开，说明 WebSocket 根本没有准备成功
+    if (!wsReady) {
+        rejectReady(
+            new Error('WebSocket 在准备完成前断开')
+        );
+    }
+
+    if (session.status === 'running') {
+        session.status = 'done';
+    }
+
     updateWSStatus();
     renderTabs();
   };
-  ws.onerror = () => { session.status = 'error'; updateWSStatus(); renderTabs(); };
+  ws.onerror = () => {
+    session.status = 'error';
+
+    rejectReady(
+        new Error('WebSocket 连接失败')
+    );
+
+    updateWSStatus();
+    renderTabs();
+  };
   session.ws = ws;
 
   // 切换到此会话
   switchSession(threadId);
   renderTabs();
   scheduleFileRefresh();
+
+  return session;
 }
 
 function switchSession(threadId) {
@@ -359,27 +429,118 @@ function renderLog(session) {
 
 // ── 发送任务 ──
 async function sendTask() {
-  const input = $('#queryInput');
-  const query = input.value.trim();
-  if (!query) return;
+    const input = $('#queryInput');
+    const query = input.value.trim();
 
-  const btn = $('#sendBtn');
-  btn.disabled = true; btn.textContent = '发送中...';
+    if (!query) return;
 
-  try {
-    const res = await fetch('/api/task', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-    });
-    const data = await res.json();
-    createSession(data.thread_id, query);
-  } catch (err) {
-    alert('请求失败: ' + err.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '▶ 发送新任务';
-    input.value = '';
-    input.focus();
-  }
+    const btn = $('#sendBtn');
+    btn.disabled = true;
+    btn.textContent = '发送中...';
+
+    let session = null;
+
+    try {
+        // ==================== 1. 前端生成 thread_id ====================
+        const threadId = crypto.randomUUID();
+
+
+        // ==================== 2. 先创建 Session 和 WebSocket ====================
+        session = createSession(
+            threadId,
+            query
+        );
+
+
+        // ==================== 3. 等待 WebSocket 真正准备完成 ====================
+        await Promise.race([
+            session.readyPromise,
+
+            new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(
+                        new Error(
+                            'WebSocket 准备超时'
+                        )
+                    );
+                }, 5000);
+            })
+        ]);
+
+
+        // ==================== 4. WebSocket 准备好以后再启动 Agent ====================
+        const res = await fetch('/api/task', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: query,
+                thread_id: threadId
+            }),
+        });
+
+
+        // ==================== 5. 检查 HTTP 是否启动成功 ====================
+        if (!res.ok) {
+            throw new Error(
+                `任务启动失败: HTTP ${res.status}`
+            );
+        }
+
+        const data = await res.json();
+
+
+        // ==================== 6. 校验前后端 thread_id ====================
+        if (data.thread_id !== threadId) {
+            throw new Error(
+                '前后端 thread_id 不一致'
+            );
+        }
+
+    } catch (err) {
+        // ==================== 7. 启动失败处理 ====================
+        if (session) {
+            session.status = 'error';
+
+            session.logs.push({
+                event: 'error',
+                message:
+                    '任务启动失败: ' + err.message,
+                data: {},
+                timestamp:
+                    new Date().toISOString()
+            });
+
+            renderTabs();
+
+            if (
+                activeSessionId === session.id
+            ) {
+                renderLog(session);
+            }
+
+            if (
+                session.ws
+                && session.ws.readyState
+                    === WebSocket.OPEN
+            ) {
+                session.ws.close();
+            }
+        }
+
+        alert(
+            '请求失败: ' + err.message
+        );
+
+    } finally {
+        // ==================== 8. 恢复按钮 ====================
+        btn.disabled = false;
+        btn.textContent = '▶ 发送新任务';
+
+        input.value = '';
+        input.focus();
+    }
 }
 
 // ── WS 状态 ──

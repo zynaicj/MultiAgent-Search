@@ -356,8 +356,8 @@ async def run_deep_agent(task_query,session_id):
             ):
                 chunk_final_content = _handle_agent_chunk(chunk)
 
-                if chunk_final_content:
-                    final_content = chunk_final_content
+                if chunk_final_content and final_content is None:
+                    final_content = chunk_final_content 
 
 
         # ==================== 最终强校验 ====================
@@ -384,6 +384,14 @@ async def run_deep_agent(task_query,session_id):
                 f"{final_content[:100]}"
             )
             monitor.report_task_result(final_content)
+
+        elif markdown_requested and _has_new_or_updated_markdown(
+            session_dir,
+            markdown_before
+        ):
+            monitor.report_task_result(
+                "Markdown 文档已生成，可在文件列表中下载。"
+            )
 
     except Exception as e:
         monitor._emit(

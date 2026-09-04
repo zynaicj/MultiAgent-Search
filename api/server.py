@@ -59,7 +59,7 @@ async def root():
         return index_path.read_text(encoding="utf-8")
     return "<h1>MultiAgent-Search API</h1><p>访问 <a href='/docs'>/docs</a> 查看 API 文档</p>"
 
-# 配置 CORS
+# 配置 跨域
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -144,11 +144,18 @@ class ConnectionManager:
         print(f"存储当前会话id:{thread_id}对应的:{websocket}")
         self.active_connections[thread_id] = websocket
         print(f"Client connected: {thread_id}")
+        # 告诉前端：
+        # 当前 thread_id 对应的 WebSocket 已经在服务端注册完成
+        await websocket.send_json({
+            "type": "ws_ready",
+            "thread_id": thread_id
+        })
 
     def disconnect(self, websocket: WebSocket, thread_id: str):
         if thread_id in self.active_connections:
             del self.active_connections[thread_id]
         print(f"Client disconnected: {thread_id}")
+        
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)

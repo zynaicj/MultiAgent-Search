@@ -64,6 +64,26 @@
   .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
   .btn-ghost.active { color: var(--text); border-color: var(--accent); background: rgba(99,102,241,.08); }
 
+  /* 修改：Agent 运行模式选择 */
+  .mode-select {
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: var(--font);
+
+    background: var(--panel);
+    color: var(--text);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+
+    outline: none;
+    cursor: pointer;
+  }
+
+  .mode-select:focus {
+    border-color: var(--accent);
+  }
+
   /* ── tab bar ── */
   .tab-bar {
     display: flex; align-items: center; gap: 4px; padding: 0 20px;
@@ -183,9 +203,39 @@
 </header>
 
 <div class="input-bar">
-  <input id="queryInput" type="text" placeholder="输入分析问题，例如：帮我分析最近电商行业的热门品类趋势" />
-  <button class="btn btn-primary" id="sendBtn" onclick="sendTask()">▶ 发送新任务</button>
-  <button class="btn btn-ghost" onclick="closeAllSessions()">清除全部</button>
+
+  <!-- 修改：选择任务执行模式 -->
+  <select id="taskMode" class="mode-select">
+    <option value="deep_agent">
+      DeepAgents 模式
+    </option>
+
+    <option value="collaboration">
+      多 Agent 协作模式
+    </option>
+  </select>
+
+  <input
+    id="queryInput"
+    type="text"
+    placeholder="输入分析问题，例如：帮我分析最近电商行业的热门品类趋势"
+  />
+
+  <button
+    class="btn btn-primary"
+    id="sendBtn"
+    onclick="sendTask()"
+  >
+    ▶ 发送新任务
+  </button>
+
+  <button
+    class="btn btn-ghost"
+    onclick="closeAllSessions()"
+  >
+    清除全部
+  </button>
+
 </div>
 
 <div class="tab-bar" id="tabBar"></div>
@@ -214,13 +264,84 @@ const $$ = s => document.querySelectorAll(s);
 
 const tagMap = {
   session_created: { dot:'s', tag:'s', text:'会话' },
+
   assistant_call:  { dot:'a', tag:'a', text:'调度' },
+
   tool_start:      { dot:'t', tag:'t', text:'工具' },
+
   task_result:     { dot:'r', tag:'r', text:'完成' },
+
   error:           { dot:'e', tag:'e', text:'错误' },
+
+
+  // 修改：Multi-Agent Collaboration 事件
+
+  collaboration_planner_start: {
+    dot:'a',
+    tag:'a',
+    text:'Planner'
+  },
+
+  collaboration_plan_created: {
+    dot:'a',
+    tag:'a',
+    text:'规划'
+  },
+
+  collaboration_worker_start: {
+    dot:'t',
+    tag:'t',
+    text:'Worker'
+  },
+
+  collaboration_worker_done: {
+    dot:'t',
+    tag:'t',
+    text:'Worker'
+  },
+
+  collaboration_worker_failed: {
+    dot:'e',
+    tag:'e',
+    text:'Worker失败'
+  },
+
+  collaboration_synthesizer_start: {
+    dot:'r',
+    tag:'r',
+    text:'综合'
+  },
+
+  collaboration_synthesizer_done: {
+    dot:'r',
+    tag:'r',
+    text:'综合'
+  },
+
+  collaboration_reviewer_start: {
+    dot:'s',
+    tag:'s',
+    text:'Reviewer'
+  },
+
+  collaboration_review_done: {
+    dot:'s',
+    tag:'s',
+    text:'审核'
+  },
+
+  collaboration_retry: {
+    dot:'e',
+    tag:'e',
+    text:'Retry'
+  },
 };
 
-function createSession(threadId, query) {
+function createSession(
+    threadId,
+    query,
+    mode
+) {
   let resolveReady;
   let rejectReady;
   // 修改：记录服务端是否已经确认 WebSocket 注册完成
@@ -234,12 +355,15 @@ function createSession(threadId, query) {
   const session = {
     id: threadId,
     query,
+
+    // 修改：保存当前任务使用的 Agent 模式
+    mode,
+
     logs: [],
     ws: null,
     dir: null,
-    status: 'running', // running | done | error
+    status: 'running',
     el: null,
-    // 等待服务端确认 WebSocket 已注册完成
     readyPromise,
   };
   sessions[threadId] = session;
@@ -395,11 +519,55 @@ function renderTabs() {
     const s = sessions[id];
     const active = id === activeSessionId ? ' active' : '';
     const statusIcon = s.status === 'running' ? '⏳' : s.status === 'error' ? '❌' : '✅';
-    return `<div class="tab${active}" onclick="switchSession('${id}')">
-      <span class="tab-status ${s.status}">${statusIcon}</span>
-      <span class="tab-query" title="${escapeAttr(s.query)}">${escapeHtml(s.query.substring(0, 20))}${s.query.length > 20 ? '...' : ''}</span>
-      <span class="tab-close" onclick="event.stopPropagation();closeSession('${id}')">×</span>
+    const modeText =
+    s.mode === 'collaboration'
+        ? 'Multi'
+        : 'Deep';
+    return `
+    <div
+        class="tab${active}"
+        onclick="switchSession('${id}')"
+    >
+        <span class="tab-status ${s.status}">
+            ${statusIcon}
+        </span>
+
+        <!-- 修改：显示当前任务模式 -->
+        <span
+            style="
+                font-size:9px;
+                color:var(--accent);
+                border:1px solid var(--accent);
+                border-radius:3px;
+                padding:0 4px;
+            "
+        >
+            ${modeText}
+        </span>
+
+        <span
+            class="tab-query"
+            title="${escapeAttr(s.query)}"
+        >
+            ${escapeHtml(
+                s.query.substring(0, 20)
+            )}
+            ${s.query.length > 20 ? '...' : ''}
+        </span>
+
+        <span
+            class="tab-close"
+            onclick="
+                event.stopPropagation();
+                closeSession('${id}')
+            "
+        >
+            ×
+        </span>
     </div>`;
+
+
+
   }).join('');
 }
 
@@ -412,9 +580,73 @@ function renderLog(session) {
   }
   area.innerHTML = session.logs.map(l => {
     const t = tagMap[l.event] || tagMap.tool_start;
-    const resultBlock = l.data?.result
-      ? `<div class="log-result-block">${escapeHtml(l.data.result.substring(0, 800))}${l.data.result.length > 800 ? '…' : ''}</div>`
-      : '';
+    let detailText = '';
+    // 修改：最终任务结果
+    if (l.data?.result) {
+        detailText = l.data.result;
+    }
+    // 修改：Planner 规划详情
+    else if (
+        l.event === 'collaboration_plan_created'
+        && Array.isArray(l.data?.tasks)
+    ) {
+        detailText = l.data.tasks
+            .map(task =>
+                `${task.task_id} | ${task.agent}\n${task.description}`
+            )
+            .join('\n\n');
+    }
+
+    // 修改：Reviewer 审核详情
+    else if (
+        l.event === 'collaboration_review_done'
+    ) {
+        detailText =
+            `score: ${l.data?.score ?? '-'}\n`
+            + `passed: ${l.data?.passed ?? '-'}\n`
+            + `feedback: ${l.data?.feedback ?? ''}`;
+
+        if (
+            Array.isArray(l.data?.missing_items)
+            && l.data.missing_items.length > 0
+        ) {
+            detailText +=
+                '\nmissing: '
+                + l.data.missing_items.join('、');
+        }
+    }
+    // 修改：Retry 任务详情
+    else if (
+        l.event === 'collaboration_retry'
+        && Array.isArray(l.data?.tasks)
+    ) {
+        detailText = l.data.tasks
+            .map(task =>
+                `${task.task_id} | ${task.agent}\n${task.description}`
+            )
+            .join('\n\n');
+    }
+    const resultBlock = detailText
+    ? `
+        <div class="log-result-block">
+            ${escapeHtml(
+                detailText.substring(
+                    0,
+                    2000
+                )
+            )}
+            ${
+                detailText.length > 2000
+                    ? '…'
+                    : ''
+            }
+        </div>
+      `
+    : '';
+
+
+
+
     return `<div class="log-entry">
       <div class="log-dot ${t.dot}"></div>
       <div class="log-body">
@@ -432,6 +664,9 @@ async function sendTask() {
     const input = $('#queryInput');
     const query = input.value.trim();
 
+    // 修改：读取用户选择的 Agent 运行模式
+    const mode = $('#taskMode').value;
+
     if (!query) return;
 
     const btn = $('#sendBtn');
@@ -448,7 +683,8 @@ async function sendTask() {
         // ==================== 2. 先创建 Session 和 WebSocket ====================
         session = createSession(
             threadId,
-            query
+            query,
+            mode
         );
 
 
@@ -476,7 +712,9 @@ async function sendTask() {
             },
             body: JSON.stringify({
                 query: query,
-                thread_id: threadId
+                thread_id: threadId,
+                // 修改：告诉后端本次使用哪个 Agent 工作流
+                mode: mode
             }),
         });
 
@@ -497,6 +735,15 @@ async function sendTask() {
                 '前后端 thread_id 不一致'
             );
         }
+        // 修改：校验后端真正启动的任务模式
+        if (
+            data.mode
+            && data.mode !== mode
+          ) {
+              throw new Error(
+                  '前后端任务模式不一致'
+              );
+            }
 
     } catch (err) {
         // ==================== 7. 启动失败处理 ====================

@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles as FastAPIStaticFiles
 from pydantic import BaseModel
-from typing import List
+from typing import List, Literal
 import shutil
 
 # Add project root to sys.path
@@ -29,6 +29,10 @@ from agent.main_agent import (
     run_deep_agent,
     init_main_agent,
     close_main_agent,
+)
+# 修改：导入新开发的多 Agent 协作工作流入口
+from agent.collaboration.runner import (
+    run_collaboration_agent,
 )
 from api.monitor import manager
 
@@ -71,6 +75,11 @@ class TaskRequest(BaseModel):
     query: str
     thread_id: str = None
 
+    mode: Literal[
+        "deep_agent",
+        "collaboration",
+    ] = "deep_agent"
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -86,15 +95,47 @@ async def startup_event():
 
 @app.post("/api/task")
 async def run_task(request: TaskRequest):
-    # 1. [ID 初始化]
-    thread_id = request.thread_id or str(uuid.uuid4())
 
-    # 2. [后台执行] 异步运行 Agent，不阻塞主线程
-    # 注意：这里简单的使用 asyncio.create_task 触发，由 main_agent 内部负责实时推送
-    asyncio.create_task(run_deep_agent(request.query, thread_id))
+    # 1. 当前任务 thread_id
+    thread_id = (
+        request.thread_id
+        or str(uuid.uuid4())
+    )
 
-    # 3. [立即响应]
-    return {"status": "started", "thread_id": thread_id}
+    # 修改：根据 mode 选择不同的 Agent 工作流
+    if request.mode == "collaboration":
+
+        asyncio.create_task(
+            run_collaboration_agent(
+                request.query,
+                thread_id,
+            )
+        )
+
+    elif request.mode == "deep_agent":
+
+        asyncio.create_task(
+            run_deep_agent(
+                request.query,
+                thread_id,
+            )
+        )
+
+    else:
+        return {
+            "status": "error",
+            "message": (
+                f"不支持的任务模式："
+                f"{request.mode}"
+            ),
+            "thread_id": thread_id,
+        }
+
+    return {
+        "status": "started",
+        "thread_id": thread_id,
+        "mode": request.mode,
+    }
 
 @app.on_event("shutdown")
 async def shutdown_event():

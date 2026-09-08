@@ -4,6 +4,12 @@ from api.monitor import monitor
 from mysql.connector import connect, Error
 from langchain_core.tools import tool
 
+# 修改：LangGraph HITL 中断能力
+from langgraph.types import interrupt
+
+# 修改：SQL 风险策略
+from agent.governance import evaluate_sql_policy
+
 load_dotenv()
 
 
@@ -158,7 +164,129 @@ def execute_sql_query(query)->str:
     # 埋点,调用工具了告诉前端哪个工具被调用了！！
     monitor.report_tool(tool_name="数据库表数据查询工具：execute_sql_query", args={"query":query})
 
-    # 获取数据库参数
+    # 修改：执行 SQL 前先进入 Governance 风险判断
+    policy_result = evaluate_sql_policy(
+        query
+    )
+
+    # 修改：高风险 SQL 不允许直接执行，
+    # 进入 Human-in-the-Loop 审批
+    if policy_result.requires_approval:
+
+        approval_payload = {
+            "type": "tool_approval",
+
+            "tool_name": "execute_sql_query",
+
+            "operation":
+                policy_result.operation,
+
+            "risk_level":
+                policy_result.risk_level.value,
+
+            "reason":
+                policy_result.reason,
+
+            "args": {
+                "query": query
+            },
+
+            "allowed_decisions": [
+                "approve",
+                "reject",
+            ],
+        }
+
+
+        # 修改：通过现有 Monitor 把审批请求推送出去
+        monitor._emit(
+            "tool_approval_required",
+
+            (
+                f"检测到高风险 SQL 操作："
+                f"{policy_result.operation}，"
+                "等待人工审批"
+            ),
+
+            approval_payload,
+        )
+
+
+        # 修改：真正暂停当前 LangGraph
+        decision = interrupt(
+            approval_payload
+        )
+
+
+        # 修改：兼容后续前端传回来的审批格式
+        if isinstance(decision, dict):
+            decision_type = decision.get(
+                "decision"
+            )
+        else:
+            decision_type = str(
+                decision
+            )
+
+
+        # 修改：不是明确 approve，
+        # 一律按照拒绝处理（Fail Closed）
+        if decision_type != "approve":
+
+            monitor._emit(
+                "tool_approval_rejected",
+
+                (
+                    f"{policy_result.operation} "
+                    "操作已被人工拒绝"
+                ),
+
+                {
+                    "tool_name":
+                        "execute_sql_query",
+
+                    "operation":
+                        policy_result.operation,
+
+                    "decision":
+                        decision_type,
+                },
+            )
+
+            return (
+                "该 SQL 操作未执行："
+                "人工审批未通过。"
+                f"\nSQL：{query}"
+            )
+
+
+        # 修改：人工明确批准
+        monitor._emit(
+            "tool_approval_approved",
+
+            (
+                f"{policy_result.operation} "
+                "操作已获人工批准"
+            ),
+
+            {
+                "tool_name":
+                    "execute_sql_query",
+
+                "operation":
+                    policy_result.operation,
+
+                "decision":
+                    "approve",
+            },
+        )
+
+
+    # 修改：
+    # 只有以下两种情况才能走到这里：
+    #
+    # 1. LOW 风险 SQL，无需审批
+    # 2. HIGH / CRITICAL SQL，人工明确 approve
     config = get_db_config()
     # 1. 创建一个链接
     # 2. 创建cursor

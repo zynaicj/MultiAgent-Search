@@ -4,69 +4,240 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MultiAgent-Search — 电商运营智能分析</title>
+
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
   :root {
-    --bg: #0f1117; --panel: #161822; --border: #252836; --text: #e1e4ed;
-    --text-dim: #7b8198; --accent: #6366f1; --accent-glow: rgba(99,102,241,.18);
-    --green: #22c55e; --green-bg: rgba(34,197,94,.12);
-    --blue: #3b82f6; --blue-bg: rgba(59,130,246,.12);
-    --orange: #f59e0b; --orange-bg: rgba(245,158,11,.12);
-    --red: #ef4444; --red-bg: rgba(239,68,68,.12);
-    --purple: #a855f7; --purple-bg: rgba(168,85,247,.12);
+    --bg: #0f1117;
+    --panel: #161822;
+    --border: #252836;
+    --text: #e1e4ed;
+    --text-dim: #7b8198;
+
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,.18);
+
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,.12);
+
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,.12);
+
+    --orange: #f59e0b;
+    --orange-bg: rgba(245,158,11,.12);
+
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,.12);
+
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,.12);
+
     --radius: 10px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+    --font:
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      "Noto Sans SC",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
   }
+
 
   body {
-    font-family: var(--font); background: var(--bg); color: var(--text);
-    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+
+    height: 100vh;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
   }
 
-  /* ── header ── */
+
+  /* ======================================================
+     Header
+     ====================================================== */
+
   header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-  }
-  header h1 { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
-  header h1 span { color: var(--accent); }
-  .ws-badge {
-    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim);
-    background: var(--panel); padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border);
-  }
-  .ws-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
-  .ws-dot.off { background: var(--red); }
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 
-  /* ── input bar ── */
+    padding: 12px 20px;
+
+    border-bottom: 1px solid var(--border);
+
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -.3px;
+  }
+
+  header h1 span {
+    color: var(--accent);
+  }
+
+
+  .ws-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    font-size: 12px;
+    color: var(--text-dim);
+
+    background: var(--panel);
+
+    padding: 5px 12px;
+
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+
+  .ws-dot {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: var(--green);
+
+    flex-shrink: 0;
+  }
+
+
+  .ws-dot.off {
+    background: var(--red);
+  }
+
+
+  /* ======================================================
+     Input Bar
+     ====================================================== */
+
   .input-bar {
-    display: flex; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    display: flex;
+    gap: 10px;
+
+    padding: 14px 20px;
+
+    border-bottom: 1px solid var(--border);
+
+    flex-shrink: 0;
   }
+
+
   .input-bar input {
-    flex: 1; padding: 11px 14px; font-size: 14px; font-family: var(--font);
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    color: var(--text); outline: none; transition: border-color .2s;
+    flex: 1;
+
+    padding: 11px 14px;
+
+    font-size: 14px;
+    font-family: var(--font);
+
+    background: var(--panel);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+
+    color: var(--text);
+
+    outline: none;
+
+    transition: border-color .2s;
   }
-  .input-bar input:focus { border-color: var(--accent); }
-  .input-bar input::placeholder { color: #4a5070; }
+
+
+  .input-bar input:focus {
+    border-color: var(--accent);
+  }
+
+
+  .input-bar input::placeholder {
+    color: #4a5070;
+  }
+
+
   .btn {
-    padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: var(--font);
-    border: none; border-radius: var(--radius); cursor: pointer;
-    white-space: nowrap; transition: all .15s;
+    padding: 10px 18px;
+
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font);
+
+    border: none;
+    border-radius: var(--radius);
+
+    cursor: pointer;
+
+    white-space: nowrap;
+
+    transition: all .15s;
   }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { box-shadow: 0 0 16px var(--accent-glow); }
-  .btn-primary:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+
+  .btn:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+
+
   .btn-ghost {
-    background: transparent; color: var(--text-dim); border: 1px solid var(--border);
+    background: transparent;
+
+    color: var(--text-dim);
+
+    border: 1px solid var(--border);
+
     font-weight: 500;
   }
-  .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
-  .btn-ghost.active { color: var(--text); border-color: var(--accent); background: rgba(99,102,241,.08); }
+
+
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+
+  .btn-ghost.active {
+    color: var(--text);
+
+    border-color: var(--accent);
+
+    background: rgba(99,102,241,.08);
+  }
+
 
   /* 修改：Agent 运行模式选择 */
+
   .mode-select {
     padding: 10px 12px;
+
     font-size: 13px;
     font-family: var(--font);
 
@@ -77,135 +248,785 @@
     border-radius: var(--radius);
 
     outline: none;
+
     cursor: pointer;
   }
+
 
   .mode-select:focus {
     border-color: var(--accent);
   }
 
-  /* ── tab bar ── */
+
+  /* ======================================================
+     Tab Bar
+     ====================================================== */
+
   .tab-bar {
-    display: flex; align-items: center; gap: 4px; padding: 0 20px;
-    border-bottom: 1px solid var(--border); flex-shrink: 0;
-    overflow-x: auto; min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    padding: 0 20px;
+
+    border-bottom: 1px solid var(--border);
+
+    flex-shrink: 0;
+
+    overflow-x: auto;
+
+    min-height: 42px;
   }
+
+
   .tab {
-    display: flex; align-items: center; gap: 7px;
-    padding: 8px 14px; font-size: 13px; color: var(--text-dim);
-    border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
-    transition: all .15s; border: 1px solid transparent;
-    user-select: none; flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    padding: 8px 14px;
+
+    font-size: 13px;
+    color: var(--text-dim);
+
+    border-radius: 8px 8px 0 0;
+
+    cursor: pointer;
+
+    white-space: nowrap;
+
+    transition: all .15s;
+
+    border: 1px solid transparent;
+
+    user-select: none;
+
+    flex-shrink: 0;
   }
-  .tab:hover { color: var(--text); background: rgba(255,255,255,.03); }
+
+
+  .tab:hover {
+    color: var(--text);
+
+    background: rgba(255,255,255,.03);
+  }
+
+
   .tab.active {
-    color: var(--text); background: var(--panel);
-    border-color: var(--border); border-bottom-color: var(--panel);
+    color: var(--text);
+
+    background: var(--panel);
+
+    border-color: var(--border);
+    border-bottom-color: var(--panel);
+
     margin-bottom: -1px;
   }
-  .tab .tab-query { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-  .tab .tab-status { font-size: 11px; }
-  .tab .tab-status.running { color: var(--blue); }
-  .tab .tab-status.done { color: var(--green); }
-  .tab .tab-status.error { color: var(--red); }
+
+
+  .tab .tab-query {
+    max-width: 180px;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+  }
+
+
+  .tab .tab-status {
+    font-size: 11px;
+  }
+
+
+  .tab .tab-status.running {
+    color: var(--blue);
+  }
+
+
+  /* 修改：等待人工审批状态 */
+
+  .tab .tab-status.waiting_approval {
+    color: var(--orange);
+  }
+
+
+  .tab .tab-status.done {
+    color: var(--green);
+  }
+
+
+  .tab .tab-status.error {
+    color: var(--red);
+  }
+
+
   .tab .tab-close {
-    width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center;
-    justify-content: center; font-size: 14px; color: var(--text-dim);
-    transition: all .1s; margin-left: 2px;
-  }
-  .tab .tab-close:hover { background: rgba(255,255,255,.1); color: var(--text); }
+    width: 18px;
+    height: 18px;
 
-  /* ── main content ── */
+    border-radius: 4px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 14px;
+
+    color: var(--text-dim);
+
+    transition: all .1s;
+
+    margin-left: 2px;
+  }
+
+
+  .tab .tab-close:hover {
+    background: rgba(255,255,255,.1);
+
+    color: var(--text);
+  }
+
+
+  /* ======================================================
+     Main
+     ====================================================== */
+
   .main-area {
-    flex: 1; display: flex; overflow: hidden;
+    flex: 1;
+
+    display: flex;
+
+    overflow: hidden;
   }
+
+
   .log-panel {
-    flex: 1; display: flex; flex-direction: column; min-width: 0;
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    min-width: 0;
   }
+
+
   .log-scroll {
-    flex: 1; overflow-y: auto; padding: 10px 20px;
+    flex: 1;
+
+    overflow-y: auto;
+
+    padding: 10px 20px;
   }
+
+
   .empty-state {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; color: var(--text-dim); font-size: 13px; text-align: center; gap: 8px;
-  }
-  .empty-state .icon { font-size: 36px; opacity: .3; }
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 
-  /* ── log entries ── */
+    height: 100%;
+
+    color: var(--text-dim);
+
+    font-size: 13px;
+
+    text-align: center;
+
+    gap: 8px;
+  }
+
+
+  .empty-state .icon {
+    font-size: 36px;
+
+    opacity: .3;
+  }
+
+
+  /* ======================================================
+     Log Entry
+     ====================================================== */
+
   .log-entry {
-    display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(37,40,54,.4);
-    font-size: 13px; line-height: 1.5; animation: fadeIn .2s ease;
+    display: flex;
+
+    gap: 10px;
+
+    padding: 7px 0;
+
+    border-bottom:
+      1px solid rgba(37,40,54,.4);
+
+    font-size: 13px;
+
+    line-height: 1.5;
+
+    animation:
+      fadeIn .2s ease;
   }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+
   .log-dot {
-    width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    margin-top: 4px;
+
+    flex-shrink: 0;
   }
-  .log-dot.s { background: var(--orange); box-shadow: 0 0 5px rgba(245,158,11,.5); }
-  .log-dot.a { background: var(--blue); box-shadow: 0 0 5px rgba(59,130,246,.5); }
-  .log-dot.t { background: var(--green); box-shadow: 0 0 5px rgba(34,197,94,.5); }
-  .log-dot.r { background: var(--purple); box-shadow: 0 0 5px rgba(168,85,247,.5); }
-  .log-dot.e { background: var(--red); box-shadow: 0 0 5px rgba(239,68,68,.5); }
-  .log-body { flex: 1; min-width: 0; }
+
+
+  .log-dot.s {
+    background: var(--orange);
+
+    box-shadow:
+      0 0 5px rgba(245,158,11,.5);
+  }
+
+
+  .log-dot.a {
+    background: var(--blue);
+
+    box-shadow:
+      0 0 5px rgba(59,130,246,.5);
+  }
+
+
+  .log-dot.t {
+    background: var(--green);
+
+    box-shadow:
+      0 0 5px rgba(34,197,94,.5);
+  }
+
+
+  .log-dot.r {
+    background: var(--purple);
+
+    box-shadow:
+      0 0 5px rgba(168,85,247,.5);
+  }
+
+
+  .log-dot.e {
+    background: var(--red);
+
+    box-shadow:
+      0 0 5px rgba(239,68,68,.5);
+  }
+
+
+  .log-body {
+    flex: 1;
+
+    min-width: 0;
+  }
+
+
   .log-tag {
-    display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
-    text-transform: uppercase; letter-spacing: .5px; margin-right: 6px; vertical-align: middle;
+    display: inline-block;
+
+    font-size: 10px;
+    font-weight: 700;
+
+    padding: 1px 6px;
+
+    border-radius: 3px;
+
+    text-transform: uppercase;
+
+    letter-spacing: .5px;
+
+    margin-right: 6px;
+
+    vertical-align: middle;
   }
-  .log-tag.s { color: var(--orange); background: var(--orange-bg); }
-  .log-tag.a { color: var(--blue); background: var(--blue-bg); }
-  .log-tag.t { color: var(--green); background: var(--green-bg); }
-  .log-tag.r { color: var(--purple); background: var(--purple-bg); }
-  .log-tag.e { color: var(--red); background: var(--red-bg); }
-  .log-msg { color: var(--text); word-break: break-word; }
-  .log-time { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+
+  .log-tag.s {
+    color: var(--orange);
+
+    background: var(--orange-bg);
+  }
+
+
+  .log-tag.a {
+    color: var(--blue);
+
+    background: var(--blue-bg);
+  }
+
+
+  .log-tag.t {
+    color: var(--green);
+
+    background: var(--green-bg);
+  }
+
+
+  .log-tag.r {
+    color: var(--purple);
+
+    background: var(--purple-bg);
+  }
+
+
+  .log-tag.e {
+    color: var(--red);
+
+    background: var(--red-bg);
+  }
+
+
+  .log-msg {
+    color: var(--text);
+
+    word-break: break-word;
+  }
+
+
+  .log-time {
+    font-size: 11px;
+
+    color: var(--text-dim);
+
+    margin-top: 1px;
+  }
+
+
   .log-result-block {
-    margin-top: 4px; padding: 8px 10px; background: var(--bg); border-radius: 5px;
-    border-left: 3px solid var(--purple); font-size: 12px; line-height: 1.6;
-    max-height: 160px; overflow-y: auto; color: var(--text-dim); white-space: pre-wrap;
+    margin-top: 4px;
+
+    padding: 8px 10px;
+
+    background: var(--bg);
+
+    border-radius: 5px;
+
+    border-left:
+      3px solid var(--purple);
+
+    font-size: 12px;
+
+    line-height: 1.6;
+
+    max-height: 160px;
+
+    overflow-y: auto;
+
+    color: var(--text-dim);
+
+    white-space: pre-wrap;
   }
 
-  /* ── file panel ── */
+
+  /* ======================================================
+     修改：Human-in-the-Loop Approval Card
+     ====================================================== */
+
+  .approval-card {
+    margin-top: 10px;
+
+    padding: 14px;
+
+    border:
+      1px solid rgba(245,158,11,.45);
+
+    border-radius: 10px;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(245,158,11,.08),
+        rgba(245,158,11,.03)
+      );
+  }
+
+
+  .approval-card.critical {
+    border-color:
+      rgba(239,68,68,.55);
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(239,68,68,.09),
+        rgba(239,68,68,.03)
+      );
+  }
+
+
+  .approval-header {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 12px;
+
+    margin-bottom: 12px;
+  }
+
+
+  .approval-title {
+    display: flex;
+    align-items: center;
+
+    gap: 7px;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    color: var(--text);
+  }
+
+
+  .risk-badge {
+    flex-shrink: 0;
+
+    padding: 3px 8px;
+
+    border-radius: 999px;
+
+    font-size: 10px;
+    font-weight: 800;
+
+    letter-spacing: .5px;
+
+    color: var(--orange);
+
+    background: var(--orange-bg);
+
+    border:
+      1px solid rgba(245,158,11,.35);
+  }
+
+
+  .risk-badge.critical {
+    color: var(--red);
+
+    background: var(--red-bg);
+
+    border-color:
+      rgba(239,68,68,.4);
+  }
+
+
+  .approval-grid {
+    display: grid;
+
+    grid-template-columns:
+      90px minmax(0, 1fr);
+
+    gap: 7px 10px;
+
+    font-size: 12px;
+  }
+
+
+  .approval-label {
+    color: var(--text-dim);
+
+    font-weight: 600;
+  }
+
+
+  .approval-value {
+    color: var(--text);
+
+    word-break: break-word;
+  }
+
+
+  .approval-sql {
+    margin-top: 12px;
+
+    padding: 10px;
+
+    border-radius: 7px;
+
+    border:
+      1px solid var(--border);
+
+    background: var(--bg);
+
+    color: #d6d8e1;
+
+    font-family:
+      Consolas,
+      "Courier New",
+      monospace;
+
+    font-size: 12px;
+
+    line-height: 1.6;
+
+    white-space: pre-wrap;
+
+    overflow-x: auto;
+  }
+
+
+  .approval-actions {
+    display: flex;
+
+    gap: 10px;
+
+    margin-top: 12px;
+  }
+
+
+  .btn-approve {
+    background: var(--green);
+
+    color: #fff;
+  }
+
+
+  .btn-approve:hover:not(:disabled) {
+    box-shadow:
+      0 0 15px rgba(34,197,94,.2);
+  }
+
+
+  .btn-reject {
+    background: var(--red);
+
+    color: #fff;
+  }
+
+
+  .btn-reject:hover:not(:disabled) {
+    box-shadow:
+      0 0 15px rgba(239,68,68,.2);
+  }
+
+
+  .approval-state {
+    margin-top: 12px;
+
+    padding: 8px 10px;
+
+    border-radius: 6px;
+
+    font-size: 12px;
+  }
+
+
+  .approval-state.processing {
+    color: var(--blue);
+
+    background: var(--blue-bg);
+  }
+
+
+  .approval-state.approved {
+    color: var(--green);
+
+    background: var(--green-bg);
+  }
+
+
+  .approval-state.rejected {
+    color: var(--red);
+
+    background: var(--red-bg);
+  }
+
+
+  .approval-state.invalid {
+    color: var(--text-dim);
+
+    background:
+      rgba(255,255,255,.04);
+  }
+
+
+  /* ======================================================
+     File Panel
+     ====================================================== */
+
   .file-panel {
-    width: 300px; flex-shrink: 0; display: flex; flex-direction: column;
-    border-left: 1px solid var(--border); background: var(--panel);
-  }
-  .file-panel-header {
-    padding: 12px 16px; border-bottom: 1px solid var(--border);
-    font-size: 12px; font-weight: 600; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: .8px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .file-list { flex: 1; overflow-y: auto; padding: 8px 10px; }
-  .file-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; border-radius: 7px; cursor: pointer;
-    transition: background .12s; margin-bottom: 2px;
-  }
-  .file-item:hover { background: rgba(255,255,255,.04); }
-  .file-icon { font-size: 18px; flex-shrink: 0; }
-  .file-info { flex: 1; min-width: 0; }
-  .file-name { font-size: 12px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .file-meta { font-size: 11px; color: var(--text-dim); }
-  .file-item .btn { padding: 4px 10px; font-size: 11px; border-radius: 5px; }
+    width: 300px;
 
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    flex-shrink: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    border-left:
+      1px solid var(--border);
+
+    background: var(--panel);
+  }
+
+
+  .file-panel-header {
+    padding: 12px 16px;
+
+    border-bottom:
+      1px solid var(--border);
+
+    font-size: 12px;
+    font-weight: 600;
+
+    color: var(--text-dim);
+
+    text-transform: uppercase;
+
+    letter-spacing: .8px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+  }
+
+
+  .file-list {
+    flex: 1;
+
+    overflow-y: auto;
+
+    padding: 8px 10px;
+  }
+
+
+  .file-item {
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 8px 10px;
+
+    border-radius: 7px;
+
+    cursor: pointer;
+
+    transition:
+      background .12s;
+
+    margin-bottom: 2px;
+  }
+
+
+  .file-item:hover {
+    background:
+      rgba(255,255,255,.04);
+  }
+
+
+  .file-icon {
+    font-size: 18px;
+
+    flex-shrink: 0;
+  }
+
+
+  .file-info {
+    flex: 1;
+
+    min-width: 0;
+  }
+
+
+  .file-name {
+    font-size: 12px;
+    font-weight: 500;
+
+    color: var(--text);
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+  }
+
+
+  .file-meta {
+    font-size: 11px;
+
+    color: var(--text-dim);
+  }
+
+
+  .file-item .btn {
+    padding: 4px 10px;
+
+    font-size: 11px;
+
+    border-radius: 5px;
+  }
+
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+
+    border-radius: 10px;
+  }
 </style>
 </head>
+
+
 <body>
 
 <header>
-  <h1>🤖 MultiAgent <span>Search</span></h1>
+  <h1>
+    🤖 MultiAgent
+    <span>Search</span>
+  </h1>
+
   <div class="ws-badge">
-    <div class="ws-dot" id="wsDot"></div>
-    <span id="wsStatus">就绪</span>
+    <div
+      class="ws-dot"
+      id="wsDot"
+    ></div>
+
+    <span id="wsStatus">
+      就绪
+    </span>
   </div>
 </header>
 
+
 <div class="input-bar">
 
-  <!-- 修改：选择任务执行模式 -->
-  <select id="taskMode" class="mode-select">
+  <select
+    id="taskMode"
+    class="mode-select"
+  >
     <option value="deep_agent">
       DeepAgents 模式
     </option>
@@ -215,11 +1036,13 @@
     </option>
   </select>
 
+
   <input
     id="queryInput"
     type="text"
     placeholder="输入分析问题，例如：帮我分析最近电商行业的热门品类趋势"
   />
+
 
   <button
     class="btn btn-primary"
@@ -228,6 +1051,7 @@
   >
     ▶ 发送新任务
   </button>
+
 
   <button
     class="btn btn-ghost"
@@ -238,643 +1062,2617 @@
 
 </div>
 
-<div class="tab-bar" id="tabBar"></div>
+
+<div
+  class="tab-bar"
+  id="tabBar"
+></div>
+
 
 <div class="main-area">
+
   <div class="log-panel">
-    <div class="log-scroll" id="logArea"></div>
+
+    <div
+      class="log-scroll"
+      id="logArea"
+    ></div>
+
   </div>
+
+
   <div class="file-panel">
+
     <div class="file-panel-header">
-      <span>生成的报告</span>
-      <button class="btn btn-ghost" onclick="refreshFiles()" style="padding:3px 9px;font-size:10px;">刷新</button>
+
+      <span>
+        生成的报告
+      </span>
+
+      <button
+        class="btn btn-ghost"
+        onclick="refreshFiles()"
+        style="
+          padding:3px 9px;
+          font-size:10px;
+        "
+      >
+        刷新
+      </button>
+
     </div>
-    <div class="file-list" id="fileList"></div>
+
+
+    <div
+      class="file-list"
+      id="fileList"
+    ></div>
+
   </div>
+
 </div>
 
+
 <script>
-// ── 会话管理 ──
-const sessions = {};    // { threadId: { id, query, logs[], ws, dir, status, element } }
+
+/* =========================================================
+   Session
+   ========================================================= */
+
+const sessions = {};
+
 let activeSessionId = null;
+
 let fileRefreshTimer = null;
 
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
+
+const $ =
+  s => document.querySelector(s);
+
+
+const $$ =
+  s => document.querySelectorAll(s);
+
+
+/* =========================================================
+   Monitor Event Tags
+   ========================================================= */
 
 const tagMap = {
-  session_created: { dot:'s', tag:'s', text:'会话' },
 
-  assistant_call:  { dot:'a', tag:'a', text:'调度' },
-
-  tool_start:      { dot:'t', tag:'t', text:'工具' },
-
-  task_result:     { dot:'r', tag:'r', text:'完成' },
-
-  error:           { dot:'e', tag:'e', text:'错误' },
+  session_created: {
+    dot: 's',
+    tag: 's',
+    text: '会话'
+  },
 
 
-  // 修改：Multi-Agent Collaboration 事件
+  assistant_call: {
+    dot: 'a',
+    tag: 'a',
+    text: '调度'
+  },
+
+
+  tool_start: {
+    dot: 't',
+    tag: 't',
+    text: '工具'
+  },
+
+
+  /* 修改：等待人工审批 */
+
+  tool_approval_required: {
+    dot: 's',
+    tag: 's',
+    text: '审批'
+  },
+
+
+  /* 修改：审批通过 */
+
+  tool_approval_approved: {
+    dot: 't',
+    tag: 't',
+    text: '审批通过'
+  },
+
+
+  /* 修改：审批拒绝 */
+
+  tool_approval_rejected: {
+    dot: 'e',
+    tag: 'e',
+    text: '审批拒绝'
+  },
+
+
+  task_result: {
+    dot: 'r',
+    tag: 'r',
+    text: '完成'
+  },
+
+
+  error: {
+    dot: 'e',
+    tag: 'e',
+    text: '错误'
+  },
+
+
+  /* Multi-Agent Collaboration */
 
   collaboration_planner_start: {
-    dot:'a',
-    tag:'a',
-    text:'Planner'
+    dot: 'a',
+    tag: 'a',
+    text: 'Planner'
   },
+
 
   collaboration_plan_created: {
-    dot:'a',
-    tag:'a',
-    text:'规划'
+    dot: 'a',
+    tag: 'a',
+    text: '规划'
   },
+
 
   collaboration_worker_start: {
-    dot:'t',
-    tag:'t',
-    text:'Worker'
+    dot: 't',
+    tag: 't',
+    text: 'Worker'
   },
+
 
   collaboration_worker_done: {
-    dot:'t',
-    tag:'t',
-    text:'Worker'
+    dot: 't',
+    tag: 't',
+    text: 'Worker'
   },
+
 
   collaboration_worker_failed: {
-    dot:'e',
-    tag:'e',
-    text:'Worker失败'
+    dot: 'e',
+    tag: 'e',
+    text: 'Worker失败'
   },
+
 
   collaboration_synthesizer_start: {
-    dot:'r',
-    tag:'r',
-    text:'综合'
+    dot: 'r',
+    tag: 'r',
+    text: '综合'
   },
+
 
   collaboration_synthesizer_done: {
-    dot:'r',
-    tag:'r',
-    text:'综合'
+    dot: 'r',
+    tag: 'r',
+    text: '综合'
   },
+
 
   collaboration_reviewer_start: {
-    dot:'s',
-    tag:'s',
-    text:'Reviewer'
+    dot: 's',
+    tag: 's',
+    text: 'Reviewer'
   },
+
 
   collaboration_review_done: {
-    dot:'s',
-    tag:'s',
-    text:'审核'
+    dot: 's',
+    tag: 's',
+    text: '审核'
   },
 
+
   collaboration_retry: {
-    dot:'e',
-    tag:'e',
-    text:'Retry'
+    dot: 'e',
+    tag: 'e',
+    text: 'Retry'
   },
 };
 
+
+/* =========================================================
+   Create Session
+   ========================================================= */
+
 function createSession(
-    threadId,
-    query,
-    mode
+  threadId,
+  query,
+  mode
 ) {
+
   let resolveReady;
+
   let rejectReady;
-  // 修改：记录服务端是否已经确认 WebSocket 注册完成
+
   let wsReady = false;
 
-  const readyPromise = new Promise((resolve, reject) => {
-      resolveReady = resolve;
-      rejectReady = reject;
-  });
+
+  const readyPromise =
+    new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+
+        resolveReady = resolve;
+
+        rejectReady = reject;
+      }
+    );
+
 
   const session = {
+
     id: threadId,
+
     query,
 
-    // 修改：保存当前任务使用的 Agent 模式
     mode,
 
     logs: [],
+
     ws: null,
+
     dir: null,
+
     status: 'running',
+
     el: null,
+
     readyPromise,
+
+
+    /* 修改：
+       当前等待人工处理的审批 */
+
+    pendingApproval: null,
+
+
+    /* 修改：
+       是否已经向 /api/approval
+       提交了审批 */
+
+    approvalSubmitting: false,
+
+
+    /* 修改：
+       当前提交的是 approve 还是 reject */
+
+    approvalSubmittingDecision: null,
   };
-  sessions[threadId] = session;
 
-  // 连 WebSocket
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${proto}//${location.host}/ws/${threadId}`;
-  const ws = new WebSocket(url);
 
-  // 修改：把 WebSocket 对象保存到当前 session
-  session.ws = ws;
+  sessions[
+    threadId
+  ] = session;
 
-  ws.onopen = () => {
-      updateWSStatus();
-  };
-  ws.onmessage = (e) => {
-      try {
-          const d = JSON.parse(e.data);
 
-          if (d.type === 'ws_ready') {
-              // 修改：说明服务端 active_connections 已经注册完成
-              wsReady = true;
+  /* WebSocket */
 
-              resolveReady();
-              updateWSStatus();
-              return;
-          }
+  const proto =
+    location.protocol === 'https:'
+      ? 'wss:'
+      : 'ws:';
 
-          if (d.type === 'pong') return;
-          if (d.type !== 'monitor_event') return;
 
-          session.logs.push({
-              event: d.event,
-              message: d.message,
-              data: d.data,
-              timestamp: d.timestamp
-          });
+  const url =
+    `${proto}//${location.host}/ws/${threadId}`;
 
-          if (
-              d.event === 'session_created'
-              && d.data?.path
-          ) {
-              session.dir = d.data.path;
-              scheduleFileRefresh();
-          }
 
-          if (d.event === 'task_result') {
-              session.status = 'done';
-              scheduleFileRefresh();
-          }
-
-          if (d.event === 'error') {
-              session.status = 'error';
-          }
-
-          renderTabs();
-
-          if (activeSessionId === threadId) {
-              renderLog(session);
-          }
-
-      } catch (_) {}
-  };
-  ws.onclose = () => {
-    // 如果 WebSocket 还没有收到服务端的 ws_ready
-    // 就已经断开，说明 WebSocket 根本没有准备成功
-    if (!wsReady) {
-        rejectReady(
-            new Error('WebSocket 在准备完成前断开')
-        );
-    }
-
-    if (session.status === 'running') {
-        session.status = 'done';
-    }
-
-    updateWSStatus();
-    renderTabs();
-  };
-  ws.onerror = () => {
-    session.status = 'error';
-
-    rejectReady(
-        new Error('WebSocket 连接失败')
+  const ws =
+    new WebSocket(
+      url
     );
 
-    updateWSStatus();
-    renderTabs();
-  };
+
   session.ws = ws;
 
-  // 切换到此会话
-  switchSession(threadId);
+
+  ws.onopen = () => {
+
+    updateWSStatus();
+  };
+
+
+  ws.onmessage = e => {
+
+    try {
+
+      const d =
+        JSON.parse(
+          e.data
+        );
+
+
+      /* 服务端确认 WebSocket
+         已注册完成 */
+
+      if (
+        d.type === 'ws_ready'
+      ) {
+
+        wsReady = true;
+
+        resolveReady();
+
+        updateWSStatus();
+
+        return;
+      }
+
+
+      if (
+        d.type === 'pong'
+      ) {
+        return;
+      }
+
+
+      if (
+        d.type !== 'monitor_event'
+      ) {
+        return;
+      }
+
+
+      /* 修改：
+         先把 Monitor Event
+         保存到当前 Session */
+
+      const logEntry = {
+
+        event:
+          d.event,
+
+        message:
+          d.message,
+
+        data:
+          d.data || {},
+
+        timestamp:
+          d.timestamp,
+
+        approvalDecision:
+          null,
+      };
+
+
+      session.logs.push(
+        logEntry
+      );
+
+
+      /* session_created */
+
+      if (
+        d.event === 'session_created'
+        &&
+        d.data?.path
+      ) {
+
+        session.dir =
+          d.data.path;
+
+        scheduleFileRefresh();
+      }
+
+
+      /* ===================================================
+         修改：
+         收到高风险 Tool 审批请求
+         =================================================== */
+
+      if (
+        d.event
+        === 'tool_approval_required'
+      ) {
+
+        session.pendingApproval =
+          d.data || {};
+
+
+        session.approvalSubmitting =
+          false;
+
+
+        session.approvalSubmittingDecision =
+          null;
+
+
+        session.status =
+          'waiting_approval';
+      }
+
+
+      /* ===================================================
+         修改：
+         后端已经真正消费 approve
+         =================================================== */
+
+      if (
+        d.event
+        === 'tool_approval_approved'
+      ) {
+
+        markLatestApprovalDecision(
+          session,
+          'approve'
+        );
+
+
+        session.pendingApproval =
+          null;
+
+
+        session.approvalSubmitting =
+          false;
+
+
+        session.approvalSubmittingDecision =
+          null;
+
+
+        /*
+         审批结束以后，
+         Agent 还会继续执行，
+         所以不是 done。
+        */
+        session.status =
+          'running';
+      }
+
+
+      /* ===================================================
+         修改：
+         后端已经真正消费 reject
+         =================================================== */
+
+      if (
+        d.event
+        === 'tool_approval_rejected'
+      ) {
+
+        markLatestApprovalDecision(
+          session,
+          'reject'
+        );
+
+
+        session.pendingApproval =
+          null;
+
+
+        session.approvalSubmitting =
+          false;
+
+
+        session.approvalSubmittingDecision =
+          null;
+
+
+        /*
+         Reject 后 Tool 会返回拒绝结果，
+         Main Agent 仍会继续形成最终回答。
+        */
+        session.status =
+          'running';
+      }
+
+
+      /* task_result */
+
+      if (
+        d.event === 'task_result'
+      ) {
+
+        session.status =
+          'done';
+
+
+        session.pendingApproval =
+          null;
+
+
+        session.approvalSubmitting =
+          false;
+
+
+        session.approvalSubmittingDecision =
+          null;
+
+
+        scheduleFileRefresh();
+      }
+
+
+      /* error */
+
+      if (
+        d.event === 'error'
+      ) {
+
+        /*
+         如果审批仍然存在，
+         说明可能是 Resume 失败，
+         后端会把 RESUMING
+         恢复为 PENDING。
+
+         所以前端重新允许用户审批。
+        */
+
+        if (
+          session.pendingApproval
+        ) {
+
+          session.status =
+            'waiting_approval';
+
+
+          session.approvalSubmitting =
+            false;
+
+
+          session.approvalSubmittingDecision =
+            null;
+
+        } else {
+
+          session.status =
+            'error';
+        }
+      }
+
+
+      renderTabs();
+
+
+      if (
+        activeSessionId
+        === threadId
+      ) {
+
+        renderLog(
+          session
+        );
+      }
+
+
+    } catch (err) {
+
+      console.error(
+        'WebSocket 消息解析失败:',
+        err
+      );
+    }
+  };
+
+
+  ws.onclose = () => {
+
+    if (
+      !wsReady
+    ) {
+
+      rejectReady(
+        new Error(
+          'WebSocket 在准备完成前断开'
+        )
+      );
+    }
+
+
+    if (
+      session.status
+      === 'running'
+    ) {
+
+      session.status =
+        'done';
+    }
+
+
+    updateWSStatus();
+
+    renderTabs();
+  };
+
+
+  ws.onerror = () => {
+
+    session.status =
+      'error';
+
+
+    rejectReady(
+      new Error(
+        'WebSocket 连接失败'
+      )
+    );
+
+
+    updateWSStatus();
+
+    renderTabs();
+  };
+
+
+  session.ws =
+    ws;
+
+
+  switchSession(
+    threadId
+  );
+
+
   renderTabs();
+
+
   scheduleFileRefresh();
+
 
   return session;
 }
 
-function switchSession(threadId) {
-  if (activeSessionId && sessions[activeSessionId]) {
-    // 保存滚动位置
-    const area = $('#logArea');
-    sessions[activeSessionId]._scrollTop = area.scrollTop;
+
+/* =========================================================
+   修改：
+   给最近一条 Approval Required
+   写入最终审批结果
+   ========================================================= */
+
+function markLatestApprovalDecision(
+  session,
+  decision
+) {
+
+  for (
+    let i =
+      session.logs.length - 1;
+
+    i >= 0;
+
+    i--
+  ) {
+
+    const log =
+      session.logs[i];
+
+
+    if (
+      log.event
+        === 'tool_approval_required'
+      &&
+      !log.approvalDecision
+    ) {
+
+      log.approvalDecision =
+        decision;
+
+      return;
+    }
   }
-  activeSessionId = threadId;
-  const s = sessions[threadId];
-  if (!s) { renderLog(null); return; }
-  renderLog(s);
-  // 恢复滚动位置
-  $('#logArea').scrollTop = s._scrollTop || 0;
+}
+
+
+/* =========================================================
+   Switch Session
+   ========================================================= */
+
+function switchSession(
+  threadId
+) {
+
+  if (
+    activeSessionId
+    &&
+    sessions[
+      activeSessionId
+    ]
+  ) {
+
+    const area =
+      $('#logArea');
+
+
+    sessions[
+      activeSessionId
+    ]._scrollTop =
+      area.scrollTop;
+  }
+
+
+  activeSessionId =
+    threadId;
+
+
+  const s =
+    sessions[
+      threadId
+    ];
+
+
+  if (!s) {
+
+    renderLog(
+      null
+    );
+
+    return;
+  }
+
+
+  renderLog(
+    s
+  );
+
+
+  $('#logArea').scrollTop =
+    s._scrollTop || 0;
+
+
   renderTabs();
+
+
   refreshFiles();
 }
 
-function closeSession(threadId) {
-  const s = sessions[threadId];
-  if (!s) return;
-  if (s.ws) { s.ws.close(); s.ws = null; }
-  delete sessions[threadId];
 
-  if (activeSessionId === threadId) {
-    const ids = Object.keys(sessions);
-    if (ids.length > 0) {
-      switchSession(ids[ids.length - 1]); // 切到最新的
+/* =========================================================
+   Close Session
+   ========================================================= */
+
+function closeSession(
+  threadId
+) {
+
+  const s =
+    sessions[
+      threadId
+    ];
+
+
+  if (!s) {
+    return;
+  }
+
+
+  if (
+    s.ws
+  ) {
+
+    s.ws.close();
+
+    s.ws = null;
+  }
+
+
+  delete sessions[
+    threadId
+  ];
+
+
+  if (
+    activeSessionId
+    === threadId
+  ) {
+
+    const ids =
+      Object.keys(
+        sessions
+      );
+
+
+    if (
+      ids.length > 0
+    ) {
+
+      switchSession(
+        ids[
+          ids.length - 1
+        ]
+      );
+
     } else {
-      activeSessionId = null;
-      renderLog(null);
+
+      activeSessionId =
+        null;
+
+
+      renderLog(
+        null
+      );
     }
   }
+
+
   renderTabs();
+
   updateWSStatus();
 }
+
+
+/* =========================================================
+   Close All
+   ========================================================= */
 
 function closeAllSessions() {
-  Object.keys(sessions).forEach(id => {
-    if (sessions[id].ws) sessions[id].ws.close();
-  });
-  Object.keys(sessions).forEach(id => delete sessions[id]);
-  activeSessionId = null;
-  renderLog(null);
+
+  Object.keys(
+    sessions
+  ).forEach(
+    id => {
+
+      if (
+        sessions[id].ws
+      ) {
+
+        sessions[id]
+          .ws
+          .close();
+      }
+    }
+  );
+
+
+  Object.keys(
+    sessions
+  ).forEach(
+    id => {
+
+      delete sessions[id];
+    }
+  );
+
+
+  activeSessionId =
+    null;
+
+
+  renderLog(
+    null
+  );
+
+
   renderTabs();
+
+
   updateWSStatus();
 }
 
-// ── 标签栏渲染 ──
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+
 function renderTabs() {
-  const bar = $('#tabBar');
-  const ids = Object.keys(sessions);
-  if (ids.length === 0) { bar.innerHTML = ''; return; }
 
-  bar.innerHTML = ids.map(id => {
-    const s = sessions[id];
-    const active = id === activeSessionId ? ' active' : '';
-    const statusIcon = s.status === 'running' ? '⏳' : s.status === 'error' ? '❌' : '✅';
-    const modeText =
-    s.mode === 'collaboration'
-        ? 'Multi'
-        : 'Deep';
-    return `
-    <div
-        class="tab${active}"
-        onclick="switchSession('${id}')"
-    >
-        <span class="tab-status ${s.status}">
-            ${statusIcon}
-        </span>
+  const bar =
+    $('#tabBar');
 
-        <!-- 修改：显示当前任务模式 -->
-        <span
-            style="
+
+  const ids =
+    Object.keys(
+      sessions
+    );
+
+
+  if (
+    ids.length === 0
+  ) {
+
+    bar.innerHTML = '';
+
+    return;
+  }
+
+
+  bar.innerHTML =
+    ids.map(
+      id => {
+
+        const s =
+          sessions[id];
+
+
+        const active =
+          id === activeSessionId
+            ? ' active'
+            : '';
+
+
+        /* 修改：
+           新增 waiting_approval 状态 */
+
+        const statusIcon =
+          s.status === 'running'
+            ? '⏳'
+            : s.status === 'waiting_approval'
+              ? '⚠️'
+              : s.status === 'error'
+                ? '❌'
+                : '✅';
+
+
+        const modeText =
+          s.mode === 'collaboration'
+            ? 'Multi'
+            : 'Deep';
+
+
+        return `
+          <div
+            class="tab${active}"
+            onclick="switchSession('${id}')"
+          >
+
+            <span
+              class="tab-status ${s.status}"
+            >
+              ${statusIcon}
+            </span>
+
+
+            <span
+              style="
                 font-size:9px;
                 color:var(--accent);
                 border:1px solid var(--accent);
                 border-radius:3px;
                 padding:0 4px;
-            "
-        >
-            ${modeText}
-        </span>
+              "
+            >
+              ${modeText}
+            </span>
 
-        <span
-            class="tab-query"
-            title="${escapeAttr(s.query)}"
-        >
-            ${escapeHtml(
-                s.query.substring(0, 20)
-            )}
-            ${s.query.length > 20 ? '...' : ''}
-        </span>
 
-        <span
-            class="tab-close"
-            onclick="
+            <span
+              class="tab-query"
+              title="${escapeAttr(s.query)}"
+            >
+              ${escapeHtml(
+                s.query.substring(
+                  0,
+                  20
+                )
+              )}
+
+              ${
+                s.query.length > 20
+                  ? '...'
+                  : ''
+              }
+            </span>
+
+
+            <span
+              class="tab-close"
+              onclick="
                 event.stopPropagation();
                 closeSession('${id}')
-            "
-        >
-            ×
-        </span>
-    </div>`;
+              "
+            >
+              ×
+            </span>
 
-
-
-  }).join('');
+          </div>
+        `;
+      }
+    )
+    .join('');
 }
 
-// ── 日志渲染 ──
-function renderLog(session) {
-  const area = $('#logArea');
-  if (!session || session.logs.length === 0) {
-    area.innerHTML = `<div class="empty-state"><div class="icon">📋</div><div>${session ? '等待 Agent 响应...' : '发送一个任务开始调试'}</div></div>`;
+
+/* =========================================================
+   修改：
+   Approval Card Renderer
+   ========================================================= */
+
+function renderApprovalCard(
+  session,
+  log
+) {
+
+  const data =
+    log.data || {};
+
+
+  const risk =
+    data.risk_level
+    || 'UNKNOWN';
+
+
+  const toolName =
+    data.tool_name
+    || '-';
+
+
+  const operation =
+    data.operation
+    || '-';
+
+
+  const reason =
+    data.reason
+    || '-';
+
+
+  const sql =
+    data.args?.query
+    || '';
+
+
+  const isCritical =
+    risk === 'CRITICAL';
+
+
+  const riskClass =
+    isCritical
+      ? 'critical'
+      : '';
+
+
+  /*
+   当前这张卡片是不是
+   当前真正仍处于 Pending 的审批。
+  */
+
+  const isCurrentPending =
+    Boolean(
+      session.pendingApproval
+      &&
+      session.pendingApproval.thread_id
+        === data.thread_id
+      &&
+      !log.approvalDecision
+    );
+
+
+  let actionHtml = '';
+
+
+  /* 已经真正审批通过 */
+
+  if (
+    log.approvalDecision
+    === 'approve'
+  ) {
+
+    actionHtml = `
+      <div
+        class="approval-state approved"
+      >
+        ✅ 已批准执行，
+        Agent 已继续运行。
+      </div>
+    `;
+  }
+
+
+  /* 已经真正审批拒绝 */
+
+  else if (
+    log.approvalDecision
+    === 'reject'
+  ) {
+
+    actionHtml = `
+      <div
+        class="approval-state rejected"
+      >
+        ❌ 已拒绝执行，
+        高风险操作没有执行。
+      </div>
+    `;
+  }
+
+
+  /* 正在向后端提交审批 */
+
+  else if (
+    isCurrentPending
+    &&
+    session.approvalSubmitting
+  ) {
+
+    const decisionText =
+      session.approvalSubmittingDecision
+        === 'approve'
+        ? '批准'
+        : '拒绝';
+
+
+    actionHtml = `
+      <div
+        class="approval-state processing"
+      >
+        ⏳ 已提交${decisionText}决定，
+        正在恢复 Agent...
+      </div>
+
+      <div
+        class="approval-actions"
+      >
+
+        <button
+          class="btn btn-approve"
+          disabled
+        >
+          批准执行
+        </button>
+
+        <button
+          class="btn btn-reject"
+          disabled
+        >
+          拒绝执行
+        </button>
+
+      </div>
+    `;
+  }
+
+
+  /* 正常 Pending */
+
+  else if (
+    isCurrentPending
+  ) {
+
+    actionHtml = `
+      <div
+        class="approval-actions"
+      >
+
+        <button
+          class="btn btn-approve"
+          onclick="
+            submitApproval(
+              '${session.id}',
+              'approve'
+            )
+          "
+        >
+          ✓ 批准执行
+        </button>
+
+
+        <button
+          class="btn btn-reject"
+          onclick="
+            submitApproval(
+              '${session.id}',
+              'reject'
+            )
+          "
+        >
+          ✕ 拒绝执行
+        </button>
+
+      </div>
+    `;
+  }
+
+
+  /* 历史卡片，但没有找到状态 */
+
+  else {
+
+    actionHtml = `
+      <div
+        class="approval-state invalid"
+      >
+        当前审批已不处于待处理状态。
+      </div>
+    `;
+  }
+
+
+  return `
+    <div
+      class="
+        approval-card
+        ${riskClass}
+      "
+    >
+
+      <div
+        class="approval-header"
+      >
+
+        <div
+          class="approval-title"
+        >
+          ⚠️ 高风险操作等待人工审批
+        </div>
+
+
+        <div
+          class="
+            risk-badge
+            ${riskClass}
+          "
+        >
+          ${escapeHtml(risk)}
+        </div>
+
+      </div>
+
+
+      <div
+        class="approval-grid"
+      >
+
+        <div
+          class="approval-label"
+        >
+          Tool
+        </div>
+
+        <div
+          class="approval-value"
+        >
+          ${escapeHtml(toolName)}
+        </div>
+
+
+        <div
+          class="approval-label"
+        >
+          Operation
+        </div>
+
+        <div
+          class="approval-value"
+        >
+          ${escapeHtml(operation)}
+        </div>
+
+
+        <div
+          class="approval-label"
+        >
+          Risk
+        </div>
+
+        <div
+          class="approval-value"
+        >
+          ${escapeHtml(risk)}
+        </div>
+
+
+        <div
+          class="approval-label"
+        >
+          Reason
+        </div>
+
+        <div
+          class="approval-value"
+        >
+          ${escapeHtml(reason)}
+        </div>
+
+      </div>
+
+
+      ${
+        sql
+          ? `
+            <pre
+              class="approval-sql"
+            >${escapeHtml(sql)}</pre>
+          `
+          : ''
+      }
+
+
+      ${actionHtml}
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   修改：
+   Submit Human Approval
+   ========================================================= */
+
+async function submitApproval(
+  threadId,
+  decision
+) {
+
+  const session =
+    sessions[
+      threadId
+    ];
+
+
+  if (!session) {
     return;
   }
-  area.innerHTML = session.logs.map(l => {
-    const t = tagMap[l.event] || tagMap.tool_start;
-    let detailText = '';
-    // 修改：最终任务结果
-    if (l.data?.result) {
-        detailText = l.data.result;
-    }
-    // 修改：Planner 规划详情
-    else if (
-        l.event === 'collaboration_plan_created'
-        && Array.isArray(l.data?.tasks)
-    ) {
-        detailText = l.data.tasks
-            .map(task =>
-                `${task.task_id} | ${task.agent}\n${task.description}`
-            )
-            .join('\n\n');
-    }
 
-    // 修改：Reviewer 审核详情
-    else if (
-        l.event === 'collaboration_review_done'
-    ) {
-        detailText =
-            `score: ${l.data?.score ?? '-'}\n`
-            + `passed: ${l.data?.passed ?? '-'}\n`
-            + `feedback: ${l.data?.feedback ?? ''}`;
 
-        if (
-            Array.isArray(l.data?.missing_items)
-            && l.data.missing_items.length > 0
-        ) {
-            detailText +=
-                '\nmissing: '
-                + l.data.missing_items.join('、');
+  if (
+    !session.pendingApproval
+  ) {
+
+    alert(
+      '当前会话已经没有待处理审批。'
+    );
+
+    return;
+  }
+
+
+  /*
+   前端第一层防重复点击。
+   后端 ApprovalRegistry
+   还有第二层 PENDING → RESUMING 防护。
+  */
+
+  if (
+    session.approvalSubmitting
+  ) {
+
+    return;
+  }
+
+
+  session.approvalSubmitting =
+    true;
+
+
+  session.approvalSubmittingDecision =
+    decision;
+
+
+  renderTabs();
+
+
+  if (
+    activeSessionId
+    === threadId
+  ) {
+
+    renderLog(
+      session
+    );
+  }
+
+
+  try {
+
+    const res =
+      await fetch(
+        '/api/approval',
+        {
+
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify(
+              {
+
+                thread_id:
+                  threadId,
+
+                decision:
+                  decision,
+              }
+            ),
         }
-    }
-    // 修改：Retry 任务详情
-    else if (
-        l.event === 'collaboration_retry'
-        && Array.isArray(l.data?.tasks)
-    ) {
-        detailText = l.data.tasks
-            .map(task =>
-                `${task.task_id} | ${task.agent}\n${task.description}`
-            )
-            .join('\n\n');
-    }
-    const resultBlock = detailText
-    ? `
-        <div class="log-result-block">
-            ${escapeHtml(
-                detailText.substring(
-                    0,
-                    2000
-                )
-            )}
-            ${
-                detailText.length > 2000
-                    ? '…'
-                    : ''
-            }
-        </div>
-      `
-    : '';
+      );
 
 
+    let data = {};
 
-
-    return `<div class="log-entry">
-      <div class="log-dot ${t.dot}"></div>
-      <div class="log-body">
-        <span class="log-tag ${t.tag}">${t.text}</span>
-        <span class="log-msg">${escapeHtml(l.message)}</span>
-        ${resultBlock}
-        <div class="log-time">${fmtTime(l.timestamp)}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── 发送任务 ──
-async function sendTask() {
-    const input = $('#queryInput');
-    const query = input.value.trim();
-
-    // 修改：读取用户选择的 Agent 运行模式
-    const mode = $('#taskMode').value;
-
-    if (!query) return;
-
-    const btn = $('#sendBtn');
-    btn.disabled = true;
-    btn.textContent = '发送中...';
-
-    let session = null;
 
     try {
-        // ==================== 1. 前端生成 thread_id ====================
-        const threadId = crypto.randomUUID();
 
+      data =
+        await res.json();
 
-        // ==================== 2. 先创建 Session 和 WebSocket ====================
-        session = createSession(
-            threadId,
-            query,
-            mode
-        );
+    } catch (_) {
 
-
-        // ==================== 3. 等待 WebSocket 真正准备完成 ====================
-        await Promise.race([
-            session.readyPromise,
-
-            new Promise((_, reject) => {
-                setTimeout(() => {
-                    reject(
-                        new Error(
-                            'WebSocket 准备超时'
-                        )
-                    );
-                }, 5000);
-            })
-        ]);
-
-
-        // ==================== 4. WebSocket 准备好以后再启动 Agent ====================
-        const res = await fetch('/api/task', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                query: query,
-                thread_id: threadId,
-                // 修改：告诉后端本次使用哪个 Agent 工作流
-                mode: mode
-            }),
-        });
-
-
-        // ==================== 5. 检查 HTTP 是否启动成功 ====================
-        if (!res.ok) {
-            throw new Error(
-                `任务启动失败: HTTP ${res.status}`
-            );
-        }
-
-        const data = await res.json();
-
-
-        // ==================== 6. 校验前后端 thread_id ====================
-        if (data.thread_id !== threadId) {
-            throw new Error(
-                '前后端 thread_id 不一致'
-            );
-        }
-        // 修改：校验后端真正启动的任务模式
-        if (
-            data.mode
-            && data.mode !== mode
-          ) {
-              throw new Error(
-                  '前后端任务模式不一致'
-              );
-            }
-
-    } catch (err) {
-        // ==================== 7. 启动失败处理 ====================
-        if (session) {
-            session.status = 'error';
-
-            session.logs.push({
-                event: 'error',
-                message:
-                    '任务启动失败: ' + err.message,
-                data: {},
-                timestamp:
-                    new Date().toISOString()
-            });
-
-            renderTabs();
-
-            if (
-                activeSessionId === session.id
-            ) {
-                renderLog(session);
-            }
-
-            if (
-                session.ws
-                && session.ws.readyState
-                    === WebSocket.OPEN
-            ) {
-                session.ws.close();
-            }
-        }
-
-        alert(
-            '请求失败: ' + err.message
-        );
-
-    } finally {
-        // ==================== 8. 恢复按钮 ====================
-        btn.disabled = false;
-        btn.textContent = '▶ 发送新任务';
-
-        input.value = '';
-        input.focus();
+      data = {};
     }
+
+
+    if (
+      !res.ok
+    ) {
+
+      const error =
+        new Error(
+          data.detail
+          ||
+          `审批提交失败: HTTP ${res.status}`
+        );
+
+
+      error.status =
+        res.status;
+
+
+      throw error;
+    }
+
+
+    /*
+     /api/approval 返回 resuming
+     代表后端已经把：
+       PENDING → RESUMING
+
+     真正的 approve / reject
+     是否被 interrupt 消费，
+     继续等待 WebSocket 的：
+       tool_approval_approved
+       tool_approval_rejected
+    */
+
+    session.status =
+      'running';
+
+
+    renderTabs();
+
+
+    if (
+      activeSessionId
+      === threadId
+    ) {
+
+      renderLog(
+        session
+      );
+    }
+
+
+  } catch (err) {
+
+    session.approvalSubmitting =
+      false;
+
+
+    session.approvalSubmittingDecision =
+      null;
+
+
+    /*
+     404：
+     后端 Registry 已经没有审批，
+     说明当前前端卡片已过期。
+    */
+
+    if (
+      err.status === 404
+    ) {
+
+      session.pendingApproval =
+        null;
+
+
+      session.status =
+        'error';
+
+    } else {
+
+      /*
+       其它异常暂时仍保留审批卡，
+       用户可以重新尝试。
+      */
+
+      session.status =
+        'waiting_approval';
+    }
+
+
+    session.logs.push(
+      {
+
+        event:
+          'error',
+
+        message:
+          '审批提交失败: '
+          + err.message,
+
+        data: {},
+
+        timestamp:
+          new Date()
+            .toISOString(),
+
+        approvalDecision:
+          null,
+      }
+    );
+
+
+    renderTabs();
+
+
+    if (
+      activeSessionId
+      === threadId
+    ) {
+
+      renderLog(
+        session
+      );
+    }
+  }
 }
 
-// ── WS 状态 ──
+
+/* =========================================================
+   Render Logs
+   ========================================================= */
+
+function renderLog(
+  session
+) {
+
+  const area =
+    $('#logArea');
+
+
+  if (
+    !session
+    ||
+    session.logs.length === 0
+  ) {
+
+    area.innerHTML = `
+      <div
+        class="empty-state"
+      >
+
+        <div class="icon">
+          📋
+        </div>
+
+        <div>
+          ${
+            session
+              ? '等待 Agent 响应...'
+              : '发送一个任务开始调试'
+          }
+        </div>
+
+      </div>
+    `;
+
+    return;
+  }
+
+
+  area.innerHTML =
+    session.logs.map(
+      l => {
+
+        const t =
+          tagMap[
+            l.event
+          ]
+          ||
+          tagMap.tool_start;
+
+
+        let detailText = '';
+
+
+        /* 最终任务结果 */
+
+        if (
+          l.data?.result
+        ) {
+
+          detailText =
+            l.data.result;
+        }
+
+
+        /* Planner */
+
+        else if (
+          l.event
+            === 'collaboration_plan_created'
+          &&
+          Array.isArray(
+            l.data?.tasks
+          )
+        ) {
+
+          detailText =
+            l.data.tasks
+            .map(
+              task =>
+                `${task.task_id} | ${task.agent}\n${task.description}`
+            )
+            .join(
+              '\n\n'
+            );
+        }
+
+
+        /* Reviewer */
+
+        else if (
+          l.event
+          === 'collaboration_review_done'
+        ) {
+
+          detailText =
+            `score: ${l.data?.score ?? '-'}\n`
+            +
+            `passed: ${l.data?.passed ?? '-'}\n`
+            +
+            `feedback: ${l.data?.feedback ?? ''}`;
+
+
+          if (
+            Array.isArray(
+              l.data?.missing_items
+            )
+            &&
+            l.data
+              .missing_items
+              .length > 0
+          ) {
+
+            detailText +=
+              '\nmissing: '
+              +
+              l.data
+                .missing_items
+                .join('、');
+          }
+        }
+
+
+        /* Retry */
+
+        else if (
+          l.event
+            === 'collaboration_retry'
+          &&
+          Array.isArray(
+            l.data?.tasks
+          )
+        ) {
+
+          detailText =
+            l.data.tasks
+            .map(
+              task =>
+                `${task.task_id} | ${task.agent}\n${task.description}`
+            )
+            .join(
+              '\n\n'
+            );
+        }
+
+
+        const resultBlock =
+          detailText
+            ? `
+              <div
+                class="log-result-block"
+              >
+                ${
+                  escapeHtml(
+                    String(
+                      detailText
+                    ).substring(
+                      0,
+                      2000
+                    )
+                  )
+                }
+
+                ${
+                  String(
+                    detailText
+                  ).length > 2000
+                    ? '…'
+                    : ''
+                }
+              </div>
+            `
+            : '';
+
+
+        /* 修改：
+           Approval Required
+           显示真正的审批卡片 */
+
+        const approvalBlock =
+          l.event
+            === 'tool_approval_required'
+            ? renderApprovalCard(
+                session,
+                l
+              )
+            : '';
+
+
+        return `
+          <div
+            class="log-entry"
+          >
+
+            <div
+              class="log-dot ${t.dot}"
+            ></div>
+
+
+            <div
+              class="log-body"
+            >
+
+              <span
+                class="log-tag ${t.tag}"
+              >
+                ${t.text}
+              </span>
+
+
+              <span
+                class="log-msg"
+              >
+                ${escapeHtml(
+                  l.message
+                )}
+              </span>
+
+
+              ${resultBlock}
+
+
+              ${approvalBlock}
+
+
+              <div
+                class="log-time"
+              >
+                ${fmtTime(
+                  l.timestamp
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        `;
+      }
+    )
+    .join('');
+
+
+  /*
+   当前正在看的会话
+   默认把日志滚到底部。
+  */
+
+  area.scrollTop =
+    area.scrollHeight;
+}
+
+
+/* =========================================================
+   Send Task
+   ========================================================= */
+
+async function sendTask() {
+
+  const input =
+    $('#queryInput');
+
+
+  const query =
+    input.value.trim();
+
+
+  const mode =
+    $('#taskMode')
+      .value;
+
+
+  if (!query) {
+    return;
+  }
+
+
+  const btn =
+    $('#sendBtn');
+
+
+  btn.disabled =
+    true;
+
+
+  btn.textContent =
+    '发送中...';
+
+
+  let session =
+    null;
+
+
+  try {
+
+    /* 1. 前端生成 thread_id */
+
+    const threadId =
+      crypto.randomUUID();
+
+
+    /* 2. 先建立 Session + WebSocket */
+
+    session =
+      createSession(
+        threadId,
+        query,
+        mode
+      );
+
+
+    /* 3. 等待 ws_ready */
+
+    await Promise.race(
+      [
+
+        session.readyPromise,
+
+
+        new Promise(
+          (
+            _,
+            reject
+          ) => {
+
+            setTimeout(
+              () => {
+
+                reject(
+                  new Error(
+                    'WebSocket 准备超时'
+                  )
+                );
+
+              },
+              5000
+            );
+          }
+        )
+      ]
+    );
+
+
+    /* 4. 启动 Agent */
+
+    const res =
+      await fetch(
+        '/api/task',
+        {
+
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify(
+              {
+
+                query:
+                  query,
+
+                thread_id:
+                  threadId,
+
+                mode:
+                  mode,
+              }
+            ),
+        }
+      );
+
+
+    /* 5. HTTP 检查 */
+
+    if (
+      !res.ok
+    ) {
+
+      throw new Error(
+        `任务启动失败: HTTP ${res.status}`
+      );
+    }
+
+
+    const data =
+      await res.json();
+
+
+    /* 6. thread_id 校验 */
+
+    if (
+      data.thread_id
+      !== threadId
+    ) {
+
+      throw new Error(
+        '前后端 thread_id 不一致'
+      );
+    }
+
+
+    /* mode 校验 */
+
+    if (
+      data.mode
+      &&
+      data.mode !== mode
+    ) {
+
+      throw new Error(
+        '前后端任务模式不一致'
+      );
+    }
+
+
+  } catch (err) {
+
+    if (
+      session
+    ) {
+
+      session.status =
+        'error';
+
+
+      session.logs.push(
+        {
+
+          event:
+            'error',
+
+          message:
+            '任务启动失败: '
+            + err.message,
+
+          data: {},
+
+          timestamp:
+            new Date()
+              .toISOString(),
+
+          approvalDecision:
+            null,
+        }
+      );
+
+
+      renderTabs();
+
+
+      if (
+        activeSessionId
+        === session.id
+      ) {
+
+        renderLog(
+          session
+        );
+      }
+
+
+      if (
+        session.ws
+        &&
+        session.ws.readyState
+          === WebSocket.OPEN
+      ) {
+
+        session.ws.close();
+      }
+    }
+
+
+    alert(
+      '请求失败: '
+      + err.message
+    );
+
+
+  } finally {
+
+    btn.disabled =
+      false;
+
+
+    btn.textContent =
+      '▶ 发送新任务';
+
+
+    input.value =
+      '';
+
+
+    input.focus();
+  }
+}
+
+
+/* =========================================================
+   WebSocket Status
+   ========================================================= */
+
 function updateWSStatus() {
-  const ids = Object.keys(sessions);
-  const hasActive = ids.some(id => sessions[id].ws && sessions[id].ws.readyState === WebSocket.OPEN);
-  const dot = $('#wsDot');
-  const txt = $('#wsStatus');
-  dot.className = 'ws-dot' + (hasActive ? '' : ' off');
-  txt.textContent = ids.length === 0 ? '就绪' : `${ids.length} 个会话${hasActive ? ' · 已连接' : ''}`;
+
+  const ids =
+    Object.keys(
+      sessions
+    );
+
+
+  const hasActive =
+    ids.some(
+      id =>
+        sessions[id].ws
+        &&
+        sessions[id].ws.readyState
+          === WebSocket.OPEN
+    );
+
+
+  const dot =
+    $('#wsDot');
+
+
+  const txt =
+    $('#wsStatus');
+
+
+  dot.className =
+    'ws-dot'
+    +
+    (
+      hasActive
+        ? ''
+        : ' off'
+    );
+
+
+  txt.textContent =
+    ids.length === 0
+      ? '就绪'
+      : `${ids.length} 个会话${
+          hasActive
+            ? ' · 已连接'
+            : ''
+        }`;
 }
 
-// ── 文件浏览 ──
+
+/* =========================================================
+   File Refresh
+   ========================================================= */
+
 function scheduleFileRefresh() {
-  if (fileRefreshTimer) clearTimeout(fileRefreshTimer);
-  fileRefreshTimer = setTimeout(refreshFiles, 3000);
+
+  if (
+    fileRefreshTimer
+  ) {
+
+    clearTimeout(
+      fileRefreshTimer
+    );
+  }
+
+
+  fileRefreshTimer =
+    setTimeout(
+      refreshFiles,
+      3000
+    );
 }
+
+
+/* =========================================================
+   File List
+   ========================================================= */
 
 async function refreshFiles() {
-  const list = $('#fileList');
+
+  const list =
+    $('#fileList');
+
+
   try {
-    const res = await fetch('/api/files');
-    const d = await res.json();
-    if (d.error || !d.files || d.files.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="icon">📂</div><div>还未生成文件</div></div>`;
+
+    const res =
+      await fetch(
+        '/api/files'
+      );
+
+
+    const d =
+      await res.json();
+
+
+    if (
+      d.error
+      ||
+      !d.files
+      ||
+      d.files.length === 0
+    ) {
+
+      list.innerHTML = `
+        <div
+          class="empty-state"
+        >
+
+          <div class="icon">
+            📂
+          </div>
+
+          <div>
+            还未生成文件
+          </div>
+
+        </div>
+      `;
+
       return;
     }
-    // 优先显示当前活跃会话的文件
-    const currentDir = activeSessionId ? `session_${activeSessionId}` : null;
-    let files = d.files;
-    // 按文件夹分组
+
+
+    const currentDir =
+      activeSessionId
+        ? `session_${activeSessionId}`
+        : null;
+
+
+    const files =
+      d.files;
+
+
     const groups = {};
-    files.forEach(f => {
-      const parts = f.path.replace(/\\/g, '/').split('/');
-      const idx = parts.findIndex(p => p.startsWith('session_'));
-      const grp = idx >= 0 ? parts[idx] : '其他';
-      if (!groups[grp]) groups[grp] = [];
-      groups[grp].push(f);
-    });
-    // 当前会话排前面
-    const sorted = Object.entries(groups).sort((a,b) => {
-      if (a[0] === currentDir) return -1;
-      if (b[0] === currentDir) return 1;
-      return b[0].localeCompare(a[0]);
-    });
+
+
+    files.forEach(
+      f => {
+
+        const parts =
+          f.path
+            .replace(
+              /\\/g,
+              '/'
+            )
+            .split('/');
+
+
+        const idx =
+          parts.findIndex(
+            p =>
+              p.startsWith(
+                'session_'
+              )
+          );
+
+
+        const grp =
+          idx >= 0
+            ? parts[idx]
+            : '其他';
+
+
+        if (
+          !groups[grp]
+        ) {
+
+          groups[grp] = [];
+        }
+
+
+        groups[grp]
+          .push(
+            f
+          );
+      }
+    );
+
+
+    const sorted =
+      Object.entries(
+        groups
+      )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+
+          if (
+            a[0]
+            === currentDir
+          ) {
+            return -1;
+          }
+
+
+          if (
+            b[0]
+            === currentDir
+          ) {
+            return 1;
+          }
+
+
+          return (
+            b[0]
+              .localeCompare(
+                a[0]
+              )
+          );
+        }
+      );
+
 
     let html = '';
-    sorted.forEach(([grp, fs]) => {
-      const isActive = grp === currentDir;
-      html += `<div style="font-size:10px;color:var(--text-dim);padding:6px 10px 2px;letter-spacing:.5px;${isActive ? 'color:var(--accent);' : ''}">${isActive ? '▸ ' : ''}${grp}</div>`;
-      fs.forEach(f => html += `
-        <div class="file-item">
-          <div class="file-icon">${iconFor(f.name)}</div>
-          <div class="file-info">
-            <div class="file-name" title="${escapeAttr(f.name)}">${escapeHtml(f.name)}</div>
-            <div class="file-meta">${fmtSize(f.size)} · ${new Date(f.mtime*1000).toLocaleString('zh-CN')}</div>
+
+
+    sorted.forEach(
+      (
+        [
+          grp,
+          fs
+        ]
+      ) => {
+
+        const isActive =
+          grp === currentDir;
+
+
+        html += `
+          <div
+            style="
+              font-size:10px;
+              color:var(--text-dim);
+              padding:6px 10px 2px;
+              letter-spacing:.5px;
+              ${
+                isActive
+                  ? 'color:var(--accent);'
+                  : ''
+              }
+            "
+          >
+            ${
+              isActive
+                ? '▸ '
+                : ''
+            }
+            ${escapeHtml(grp)}
           </div>
-          <button class="btn btn-primary" onclick="event.stopPropagation();downloadFile('${encodeURIComponent(f.path)}')">下载</button>
-        </div>`);
-    });
-    list.innerHTML = html;
-  } catch (_) {}
+        `;
+
+
+        fs.forEach(
+          f => {
+
+            html += `
+              <div
+                class="file-item"
+              >
+
+                <div
+                  class="file-icon"
+                >
+                  ${iconFor(
+                    f.name
+                  )}
+                </div>
+
+
+                <div
+                  class="file-info"
+                >
+
+                  <div
+                    class="file-name"
+                    title="${escapeAttr(f.name)}"
+                  >
+                    ${escapeHtml(f.name)}
+                  </div>
+
+
+                  <div
+                    class="file-meta"
+                  >
+                    ${fmtSize(f.size)}
+                    ·
+                    ${
+                      new Date(
+                        f.mtime * 1000
+                      )
+                      .toLocaleString(
+                        'zh-CN'
+                      )
+                    }
+                  </div>
+
+                </div>
+
+
+                <button
+                  class="btn btn-primary"
+                  onclick="
+                    event.stopPropagation();
+                    downloadFile(
+                      '${encodeURIComponent(f.path)}'
+                    )
+                  "
+                >
+                  下载
+                </button>
+
+              </div>
+            `;
+          }
+        );
+      }
+    );
+
+
+    list.innerHTML =
+      html;
+
+
+  } catch (err) {
+
+    console.error(
+      '刷新文件列表失败:',
+      err
+    );
+  }
 }
 
-// ── 工具函数 ──
-function escapeHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escapeAttr(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString('zh-CN',{hour12:false}); } catch(_) { return ''; } }
-function fmtSize(b) {
-  if (!b) return '0 B';
-  const u = ['B','KB','MB','GB']; let i = 0;
-  while (b >= 1024 && i < 3) { b /= 1024; i++; }
-  return b.toFixed(i > 0 ? 1 : 0) + ' ' + u[i];
-}
-function iconFor(n) { if (n.endsWith('.md')) return '📝'; if (n.endsWith('.pdf')) return '📄'; return '📎'; }
-function downloadFile(p) {
-    window.open(`/api/download?path=${p}`, '_blank');
+
+/* =========================================================
+   Utils
+   ========================================================= */
+
+function escapeHtml(
+  s
+) {
+
+  if (
+    s === null
+    ||
+    s === undefined
+  ) {
+    return '';
+  }
+
+
+  return String(s)
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    );
 }
 
-// ── 键盘 ──
-$('#queryInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTask(); }
-});
 
-// ── 初始 ──
+function escapeAttr(
+  s
+) {
+
+  if (
+    s === null
+    ||
+    s === undefined
+  ) {
+    return '';
+  }
+
+
+  return String(s)
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    );
+}
+
+
+function fmtTime(
+  iso
+) {
+
+  try {
+
+    return new Date(
+      iso
+    )
+    .toLocaleTimeString(
+      'zh-CN',
+      {
+        hour12:
+          false
+      }
+    );
+
+  } catch (_) {
+
+    return '';
+  }
+}
+
+
+function fmtSize(
+  b
+) {
+
+  if (!b) {
+    return '0 B';
+  }
+
+
+  const u = [
+    'B',
+    'KB',
+    'MB',
+    'GB'
+  ];
+
+
+  let i = 0;
+
+
+  while (
+    b >= 1024
+    &&
+    i < 3
+  ) {
+
+    b /= 1024;
+
+    i++;
+  }
+
+
+  return (
+    b.toFixed(
+      i > 0
+        ? 1
+        : 0
+    )
+    +
+    ' '
+    +
+    u[i]
+  );
+}
+
+
+function iconFor(
+  n
+) {
+
+  if (
+    n.endsWith(
+      '.md'
+    )
+  ) {
+
+    return '📝';
+  }
+
+
+  if (
+    n.endsWith(
+      '.pdf'
+    )
+  ) {
+
+    return '📄';
+  }
+
+
+  return '📎';
+}
+
+
+function downloadFile(
+  p
+) {
+
+  window.open(
+    `/api/download?path=${p}`,
+    '_blank'
+  );
+}
+
+
+/* =========================================================
+   Keyboard
+   ========================================================= */
+
+$('#queryInput')
+  .addEventListener(
+    'keydown',
+    e => {
+
+      if (
+        e.key === 'Enter'
+        &&
+        !e.shiftKey
+      ) {
+
+        e.preventDefault();
+
+        sendTask();
+      }
+    }
+  );
+
+
+/* =========================================================
+   Initial
+   ========================================================= */
+
 updateWSStatus();
+
 refreshFiles();
+
 </script>
+
 </body>
 </html>

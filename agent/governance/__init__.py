@@ -1,13 +1,4 @@
 from agent.governance.models import (
-    RiskLevel,
-    SQLPolicyResult,
-)
-
-from agent.governance.sql_policy import (
-    evaluate_sql_policy,
-)
-
-from agent.governance.models import (
     ApprovalStatus,
     PendingApproval,
     RiskLevel,
@@ -18,7 +9,6 @@ from agent.governance.sql_policy import (
     evaluate_sql_policy,
 )
 
-# 修改：审批注册表
 from agent.governance.approval_registry import (
     approval_registry,
 )

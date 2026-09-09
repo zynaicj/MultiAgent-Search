@@ -1,237 +1,481 @@
 import os
+
 from dotenv import load_dotenv
-from api.monitor import monitor
 from mysql.connector import connect, Error
 from langchain_core.tools import tool
-
-# 修改：LangGraph HITL 中断能力
 from langgraph.types import interrupt
 
-# 修改：SQL 风险策略
-from agent.governance import evaluate_sql_policy
+from api.monitor import monitor
+
+# 修改：获取当前 Agent 任务对应的 thread_id
+from api.context import get_thread_context
+
+# 修改：SQL 风险策略 + Pending Approval 注册表
+from agent.governance import (
+    PendingApproval,
+    approval_registry,
+    evaluate_sql_policy,
+)
+
 
 load_dotenv()
 
 
-# 加载配置文件方便后续使用
 def get_db_config():
-    """Get database configuration from environment variables."""
-    config = {
-        "host": os.getenv("MYSQL_HOST", "localhost"),
-        "port": int(os.getenv("MYSQL_PORT", "3306")),
-        "user": os.getenv("MYSQL_USER"),
-        "password": os.getenv("MYSQL_PASSWORD"),
-        "database": os.getenv("MYSQL_DATABASE"),
-        "charset": os.getenv("MYSQL_CHARSET", "utf8mb4"),
-        "collation": os.getenv("MYSQL_COLLATION", "utf8mb4_unicode_ci"),
-        "autocommit": True,
-        "connection_timeout": int(os.getenv("MYSQL_TIMEOUT", "10")),
-        "sql_mode": os.getenv("MYSQL_SQL_MODE", "TRADITIONAL"),
-    }
-    # 移除 None 值（核心必要操作）
-    config = {k: v for k, v in config.items() if v is not None}
+    """
+    从环境变量读取数据库配置。
+    """
 
-    # 补充：校验核心配置是否存在（可选但推荐）
-    required_keys = ["user", "password", "database"]
-    missing_keys = [k for k in required_keys if k not in config]
+    config = {
+        "host": os.getenv(
+            "MYSQL_HOST",
+            "localhost",
+        ),
+        "port": int(
+            os.getenv(
+                "MYSQL_PORT",
+                "3306",
+            )
+        ),
+        "user": os.getenv(
+            "MYSQL_USER"
+        ),
+        "password": os.getenv(
+            "MYSQL_PASSWORD"
+        ),
+        "database": os.getenv(
+            "MYSQL_DATABASE"
+        ),
+        "charset": os.getenv(
+            "MYSQL_CHARSET",
+            "utf8mb4",
+        ),
+        "collation": os.getenv(
+            "MYSQL_COLLATION",
+            "utf8mb4_unicode_ci",
+        ),
+        "autocommit": True,
+        "connection_timeout": int(
+            os.getenv(
+                "MYSQL_TIMEOUT",
+                "10",
+            )
+        ),
+        "sql_mode": os.getenv(
+            "MYSQL_SQL_MODE",
+            "TRADITIONAL",
+        ),
+    }
+
+    # 去掉 None 配置
+    config = {
+        key: value
+        for key, value in config.items()
+        if value is not None
+    }
+
+    # 校验数据库核心配置
+    required_keys = [
+        "user",
+        "password",
+        "database",
+    ]
+
+    missing_keys = [
+        key
+        for key in required_keys
+        if key not in config
+    ]
+
     if missing_keys:
-        raise ValueError(f"缺失数据库核心配置：{', '.join(missing_keys)}")
+        raise ValueError(
+            "缺失数据库核心配置："
+            + ", ".join(
+                missing_keys
+            )
+        )
 
     return config
 
-@tool
-def list_sql_tables()->str:
-    """
-    查询当前库中所有可用的表！
-    作用：为了模型识别有哪些可用的表！方便进行后续的自定义sql查询
-    :return: 有表： 可用的表有：表1,表2,表3....  没有表: 没有可用的表   出现异常：查询出现异常：异常信息
-    """
-
-    # 埋点,调用工具了告诉前端哪个工具被调用了！！
-    monitor.report_tool(tool_name="数据库表名查询工具：list_sql_tables", args={})
-    # 加载数据库信息配置
-    config = get_db_config()
-
-    # 1. 创建一个链接
-    # 2. 创建cursor
-    # 3. cursor执行sql语句
-    # 4. cursor获取返回结果
-    # 5. 释放连接和cursor资源
-    # 确保要捕捉异常信息，返回异常提示，避免直接报错！
-    try:
-        # 确保资源使用完毕一定释放 with
-        with connect(**config) as  conn:
-            with conn.cursor() as cursor:
-                sql = "show tables"
-                cursor.execute(sql)
-                # 捕捉执行结果 要所有的表名称
-                # [(表1),(表2),(表3)]
-                tables = cursor.fetchall()
-                if not tables:
-                    return "没有可用的表"
-                # 可用的表有：表1,表2,表3....
-                # [表1,表2,表3]
-                table_names = [table[0] for table in tables]
-                return f"可用的表有：{', '.join(table_names)}"
-    except Error as e:
-        return f"查询出现异常：{str(e)}"
-
 
 @tool
-def get_table_data(table_name)->str:
+def list_sql_tables() -> str:
     """
-    查询指定表名的数据！当前工具调用之前，必须先调用list_sql_tables完成表名的校验！
-    此工具的作用：1.可以完成单表数据的查询 2. 可以为多表查询提供表结果信息（列名&数据格式）
-    :param table_name: 表名
-    :return: csv格式的数据（模拟表格数据格式）
-             1.第一行是列信息，列之间使用,（英文的逗号）分割
-             2.第二行开始是表数据，值之间也使用,(英文的逗号)分割
-             3.行和行之间使用\n分割
-             4.至多表数据查询100条
-             例如：
-                id,name,age\n -> 列头
-                1,张三,18\n
-                1,张三,18\n    -> 至多查询100条
-                1,张三,18\n
-                1,张三,18\n
+    查询当前数据库中的所有表。
+
+    主要作用：
+    让数据库 Agent 先了解当前有哪些表，
+    方便后续进行表结构查询和 SQL 查询。
     """
-    # 埋点,调用工具了告诉前端哪个工具被调用了！！
-    monitor.report_tool(tool_name="数据库表数据查询工具：get_table_data", args={"table_name":table_name})
 
-    # 获取数据库参数
-    config = get_db_config()
-    # 1. 创建一个链接
-    # 2. 创建cursor
-    # 3. cursor执行sql语句
-    # 4. cursor获取返回结果
-    # 5. 释放连接和cursor资源
-    # 确保要捕捉异常信息，返回异常提示，避免直接报错！
-    try:
-        # 1. 创建一个链接
-        with connect(**config) as  conn:
-            # 2. 创建cursor
-            with conn.cursor() as cursor:
-                # 3. cursor执行sql语句
-                sql = f"select * from {table_name} limit 100"
-                cursor.execute(sql)
-                # 4. cursor获取返回结果
-                # 4.1 获取列的信息
-                # 返回的查询结果的列的信息
-                # description => [(id,列长度...),(),()]
-                # 如果查询没有结果 -》 description 也是None
-                description = cursor.description
-                if not description:
-                    return f"数据表：{table_name}为空没有数据！"
-                # 4.2 获取查询结果
-                # description =>  [(id,列长度...),(date,....),()] => 元组 index = 0 列名
-                # [列1,列2,列3...]
-                columns = [ desc[0] for desc in description ] # [1,2,3,4]
-                # 表数据
-                # [(1,张三),(2,李四),(3,二狗子)]
-                rows = cursor.fetchall()
-                # (1,张三) -> ('1','张三') -> '1,张三'
-                # ['1,张三','1,张三','1,张三','1,张三','1,张三']
-                results = [ ",".join(map(str,row)) for row in rows]
-
-                # columns -> csv -> header
-                # id,name,age
-                header_str = ",".join(columns)
-                # '1,张三'\n
-                data_str = "\n".join(results)
-                return f"{header_str}\n{data_str}"
-    except Error as e:
-        return f"查询出现异常：{str(e)}"
-
-
-@tool
-def execute_sql_query(query)->str:
-    """
-    执行自定义查询sql语句！切记：执行之前，需要通过执行 list_sql_tables明确表名！执行get_table_data
-    明确表结构和数据格式！
-    :param query: 要执行的自定义sql语句
-    :return: csv格式的数据（模拟表格数据格式）
-             1.第一行是列信息，列之间使用,（英文的逗号）分割
-             2.第二行开始是表数据，值之间也使用,(英文的逗号)分割
-             3.行和行之间使用\n分割
-             4.至多表数据查询100条
-             例如：
-                id,name,age\n -> 列头
-                1,张三,18\n
-                1,张三,18\n    -> 至多查询100条
-                1,张三,18\n
-                1,张三,18\n
-    """
-    # 埋点,调用工具了告诉前端哪个工具被调用了！！
-    monitor.report_tool(tool_name="数据库表数据查询工具：execute_sql_query", args={"query":query})
-
-    # 修改：执行 SQL 前先进入 Governance 风险判断
-    policy_result = evaluate_sql_policy(
-        query
+    monitor.report_tool(
+        tool_name=(
+            "数据库表名查询工具："
+            "list_sql_tables"
+        ),
+        args={},
     )
 
-    # 修改：高风险 SQL 不允许直接执行，
-    # 进入 Human-in-the-Loop 审批
-    if policy_result.requires_approval:
+    config = get_db_config()
 
-        approval_payload = {
-            "type": "tool_approval",
+    try:
 
-            "tool_name": "execute_sql_query",
+        with connect(
+            **config
+        ) as conn:
 
-            "operation":
-                policy_result.operation,
+            with conn.cursor() as cursor:
 
-            "risk_level":
-                policy_result.risk_level.value,
+                sql = "show tables"
 
-            "reason":
-                policy_result.reason,
+                cursor.execute(
+                    sql
+                )
 
-            "args": {
-                "query": query
-            },
+                tables = (
+                    cursor.fetchall()
+                )
 
-            "allowed_decisions": [
-                "approve",
-                "reject",
-            ],
-        }
+                if not tables:
+                    return "没有可用的表"
 
+                table_names = [
+                    table[0]
+                    for table in tables
+                ]
 
-        # 修改：通过现有 Monitor 把审批请求推送出去
-        monitor._emit(
-            "tool_approval_required",
+                return (
+                    "可用的表有："
+                    + ", ".join(
+                        table_names
+                    )
+                )
 
-            (
-                f"检测到高风险 SQL 操作："
-                f"{policy_result.operation}，"
-                "等待人工审批"
-            ),
+    except Error as e:
 
-            approval_payload,
+        return (
+            "查询出现异常："
+            f"{str(e)}"
         )
 
 
-        # 修改：真正暂停当前 LangGraph
+@tool
+def get_table_data(
+    table_name,
+) -> str:
+    """
+    查询指定表的数据。
+
+    当前工具调用前，
+    应优先调用 list_sql_tables 确认表名。
+
+    该工具可以：
+    1. 查询单表数据；
+    2. 为复杂 SQL 提供字段和数据格式参考。
+    """
+
+    monitor.report_tool(
+        tool_name=(
+            "数据库表数据查询工具："
+            "get_table_data"
+        ),
+        args={
+            "table_name":
+                table_name
+        },
+    )
+
+    config = get_db_config()
+
+    try:
+
+        with connect(
+            **config
+        ) as conn:
+
+            with conn.cursor() as cursor:
+
+                sql = (
+                    f"select * "
+                    f"from {table_name} "
+                    "limit 100"
+                )
+
+                cursor.execute(
+                    sql
+                )
+
+                description = (
+                    cursor.description
+                )
+
+                if not description:
+
+                    return (
+                        f"数据表："
+                        f"{table_name}"
+                        "为空没有数据！"
+                    )
+
+                columns = [
+                    desc[0]
+                    for desc in description
+                ]
+
+                rows = (
+                    cursor.fetchall()
+                )
+
+                results = [
+                    ",".join(
+                        map(
+                            str,
+                            row,
+                        )
+                    )
+                    for row in rows
+                ]
+
+                header_str = (
+                    ",".join(
+                        columns
+                    )
+                )
+
+                data_str = (
+                    "\n".join(
+                        results
+                    )
+                )
+
+                return (
+                    f"{header_str}\n"
+                    f"{data_str}"
+                )
+
+    except Error as e:
+
+        return (
+            "查询出现异常："
+            f"{str(e)}"
+        )
+
+
+@tool
+def execute_sql_query(
+    query,
+) -> str:
+    """
+    执行自定义 SQL。
+
+    在真正访问数据库之前，
+    会先经过 Tool Governance 风险判断。
+
+    LOW：
+        自动执行。
+
+    HIGH / CRITICAL：
+        创建 PendingApproval，
+        通过 interrupt 暂停 Graph，
+        等待人工批准或拒绝。
+    """
+
+    # 先告诉前端当前调用了 SQL Tool
+    monitor.report_tool(
+        tool_name=(
+            "数据库表数据查询工具："
+            "execute_sql_query"
+        ),
+        args={
+            "query": query
+        },
+    )
+
+
+    # ======================================================
+    # 修改：第一步，SQL Governance 风险判断
+    # ======================================================
+
+    policy_result = (
+        evaluate_sql_policy(
+            query
+        )
+    )
+
+
+    # ======================================================
+    # 修改：第二步，高风险 SQL 进入 HITL
+    # ======================================================
+
+    if policy_result.requires_approval:
+
+        # 当前 Tool Call 必须绑定一个真实 thread_id
+        thread_id = (
+            get_thread_context()
+        )
+
+        if not thread_id:
+
+            return (
+                "该 SQL 操作未执行："
+                "当前缺少 thread_id，"
+                "无法建立人工审批上下文。"
+            )
+
+
+        # ==================================================
+        # 修改：创建真正的待审批对象
+        # ==================================================
+
+        pending_approval = (
+            PendingApproval(
+                thread_id=thread_id,
+
+                tool_name=(
+                    "execute_sql_query"
+                ),
+
+                operation=(
+                    policy_result.operation
+                ),
+
+                risk_level=(
+                    policy_result.risk_level
+                ),
+
+                reason=(
+                    policy_result.reason
+                ),
+
+                args={
+                    "query": query
+                },
+            )
+        )
+
+
+        # ==================================================
+        # 修改：注册到 ApprovalRegistry
+        # ==================================================
+
+        try:
+
+            (
+                pending_approval,
+                is_new,
+            ) = (
+                approval_registry.register(
+                    pending_approval
+                )
+            )
+
+        except RuntimeError as e:
+
+            return (
+                "该 SQL 操作未执行："
+                f"{str(e)}"
+            )
+
+
+        # ==================================================
+        # 修改：构造 interrupt / 前端审批数据
+        # ==================================================
+
+        approval_payload = {
+            "type":
+                "tool_approval",
+
+            "thread_id":
+                thread_id,
+
+            "tool_name":
+                pending_approval.tool_name,
+
+            "operation":
+                pending_approval.operation,
+
+            "risk_level":
+                pending_approval
+                .risk_level
+                .value,
+
+            "reason":
+                pending_approval.reason,
+
+            "args":
+                pending_approval.args,
+
+            "allowed_decisions":
+                pending_approval
+                .allowed_decisions,
+        }
+
+
+        # ==================================================
+        # 修改：
+        # 只有第一次注册审批时才通知前端
+        #
+        # interrupt Resume 后节点会重新执行，
+        # register() 会发现同一审批已经存在，
+        # 此时 is_new=False，
+        # 因而不会重复推送审批卡片。
+        # ==================================================
+
+        if is_new:
+
+            monitor._emit(
+                "tool_approval_required",
+
+                (
+                    "检测到高风险 SQL 操作："
+                    f"{policy_result.operation}，"
+                    "等待人工审批"
+                ),
+
+                approval_payload,
+            )
+
+
+        # ==================================================
+        # 修改：真正暂停 LangGraph
+        # ==================================================
+
         decision = interrupt(
             approval_payload
         )
 
 
-        # 修改：兼容后续前端传回来的审批格式
-        if isinstance(decision, dict):
-            decision_type = decision.get(
-                "decision"
+        # ==================================================
+        # 修改：解析人工审批结果
+        # ==================================================
+
+        if isinstance(
+            decision,
+            dict,
+        ):
+
+            decision_type = (
+                decision.get(
+                    "decision"
+                )
             )
+
         else:
+
             decision_type = str(
                 decision
             )
 
 
-        # 修改：不是明确 approve，
-        # 一律按照拒绝处理（Fail Closed）
-        if decision_type != "approve":
+        # ==================================================
+        # 修改：不是 approve，一律拒绝
+        # Fail Closed
+        # ==================================================
+
+        if (
+            decision_type
+            != "approve"
+        ):
 
             monitor._emit(
                 "tool_approval_rejected",
@@ -242,16 +486,29 @@ def execute_sql_query(query)->str:
                 ),
 
                 {
+                    "thread_id":
+                        thread_id,
+
                     "tool_name":
                         "execute_sql_query",
 
                     "operation":
-                        policy_result.operation,
+                        policy_result
+                        .operation,
 
                     "decision":
                         decision_type,
                 },
             )
+
+
+            # 修改：
+            # 本次审批已经被消费，
+            # 从 Registry 中删除。
+            approval_registry.clear(
+                thread_id
+            )
+
 
             return (
                 "该 SQL 操作未执行："
@@ -260,7 +517,10 @@ def execute_sql_query(query)->str:
             )
 
 
-        # 修改：人工明确批准
+        # ==================================================
+        # 修改：人工明确 approve
+        # ==================================================
+
         monitor._emit(
             "tool_approval_approved",
 
@@ -270,11 +530,15 @@ def execute_sql_query(query)->str:
             ),
 
             {
+                "thread_id":
+                    thread_id,
+
                 "tool_name":
                     "execute_sql_query",
 
                 "operation":
-                    policy_result.operation,
+                    policy_result
+                    .operation,
 
                 "decision":
                     "approve",
@@ -282,60 +546,106 @@ def execute_sql_query(query)->str:
         )
 
 
-    # 修改：
-    # 只有以下两种情况才能走到这里：
+        # 修改：
+        # approve 已经被 interrupt 消费，
+        # 清除 Pending Approval。
+        approval_registry.clear(
+            thread_id
+        )
+
+
+    # ======================================================
+    # 只有下面两种情况能够执行到这里：
     #
-    # 1. LOW 风险 SQL，无需审批
-    # 2. HIGH / CRITICAL SQL，人工明确 approve
+    # 1. LOW 风险 SQL
+    # 2. HIGH / CRITICAL SQL 并且人工 approve
+    # ======================================================
+
     config = get_db_config()
-    # 1. 创建一个链接
-    # 2. 创建cursor
-    # 3. cursor执行sql语句
-    # 4. cursor获取返回结果
-    # 5. 释放连接和cursor资源
-    # 确保要捕捉异常信息，返回异常提示，避免直接报错！
+
+
     try:
-        # 1. 创建一个链接
-        with connect(**config) as  conn:
-            # 2. 创建cursor
+
+        with connect(
+            **config
+        ) as conn:
+
             with conn.cursor() as cursor:
-                # 3. cursor执行sql语句
-                cursor.execute(query)
-                # 4. cursor获取返回结果
-                # 4.1 获取列的信息
-                # 返回的查询结果的列的信息
-                # description => [(id,列长度...),(),()]
-                # 如果查询没有结果 -》 description 也是None
-                description = cursor.description
+
+                # 真正执行 SQL
+                cursor.execute(
+                    query
+                )
+
+
+                description = (
+                    cursor.description
+                )
+
+
+                # INSERT / UPDATE / DELETE 等操作
+                # 通常没有查询结果集
                 if not description:
-                    return f"执行自定义SQL语句查询没有结果，sql为：{query}！"
-                # 4.2 获取查询结果
-                # description =>  [(id,列长度...),(date,....),()] => 元组 index = 0 列名
-                # [列1,列2,列3...]
-                columns = [ desc[0] for desc in description ] # [1,2,3,4]
-                # 表数据
-                # [(1,张三),(2,李四),(3,二狗子)]
-                rows = cursor.fetchall()
-                # (1,张三) -> ('1','张三') -> '1,张三'
-                # ['1,张三','1,张三','1,张三','1,张三','1,张三']
-                results = [ ",".join(map(str,row)) for row in rows]
 
-                # columns -> csv -> header
-                # id,name,age
-                header_str = ",".join(columns)
-                # '1,张三'\n
-                data_str = "\n".join(results)
-                return f"{header_str}\n{data_str}"
+                    return (
+                        "SQL 已执行完成，"
+                        "但没有返回结果集。"
+                        f"\nSQL：{query}"
+                    )
+
+
+                columns = [
+                    desc[0]
+                    for desc in description
+                ]
+
+
+                rows = (
+                    cursor.fetchall()
+                )
+
+
+                results = [
+                    ",".join(
+                        map(
+                            str,
+                            row,
+                        )
+                    )
+                    for row in rows
+                ]
+
+
+                header_str = (
+                    ",".join(
+                        columns
+                    )
+                )
+
+
+                data_str = (
+                    "\n".join(
+                        results
+                    )
+                )
+
+
+                return (
+                    f"{header_str}\n"
+                    f"{data_str}"
+                )
+
+
     except Error as e:
-        return f"查询出现异常：{str(e)}"
 
+        return (
+            "查询出现异常："
+            f"{str(e)}"
+        )
 
 
 if __name__ == "__main__":
-    print(execute_sql_query("SELECT * FROM orders WHERE category = '数码电子'"))
 
-
-
-
-
-
+    print(
+        "db_tools.py loaded"
+    )

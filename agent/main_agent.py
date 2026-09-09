@@ -2,6 +2,8 @@ from agent.subagents.knowledge_base_agent import knowledge_base_agent
 from agent.subagents.database_query_agent import database_query_agent
 from agent.subagents.network_search_agent import network_search_agent
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+# 修改：用于恢复被 interrupt 暂停的 Agent Graph
+from langgraph.types import Command
 
 # main_agent tool导入
 from tools.markdown_tools import generate_markdown
@@ -405,3 +407,140 @@ async def run_deep_agent(task_query,session_id):
             session_id_token
         )
 
+# 修改：恢复被 Human-in-the-Loop interrupt 暂停的 Main Agent
+async def resume_deep_agent(
+    session_id: str,
+    decision: str,
+):
+    """
+    根据人工审批结果，
+    恢复指定 thread_id 下被 interrupt 暂停的 DeepAgent。
+
+    session_id:
+        当前前端会话，也就是 LangGraph thread_id。
+
+    decision:
+        approve / reject
+    """
+
+    print(
+        f"恢复 HITL Agent，会话id：{session_id}，"
+        f"人工决策：{decision}"
+    )
+
+
+    # 修改：
+    # 原来的 run_deep_agent 已经结束并清理 ContextVar，
+    # 所以恢复 Graph 时必须重新建立当前 session 上下文。
+    session_dir = (
+        project_root_path
+        / "output"
+        / f"session_{session_id}"
+    )
+
+    session_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    session_dir_str = str(
+        session_dir
+    ).replace(
+        "\\",
+        "/",
+    )
+
+
+    session_dir_token = set_session_context(
+        session_dir_str
+    )
+
+    session_id_token = set_thread_context(
+        session_id
+    )
+
+
+    try:
+
+        agent = await init_main_agent()
+
+
+        # 修改：
+        # 必须继续使用原来的 thread_id，
+        # LangGraph 才能找到之前 interrupt 保存的 checkpoint。
+        config = {
+            "configurable": {
+                "thread_id": session_id
+            }
+        }
+
+
+        final_content = None
+
+
+        # 修改：
+        # Command(resume=...) 会把人的决定
+        # 送回之前的 interrupt()。
+        async for chunk in agent.astream(
+            Command(
+                resume={
+                    "decision": decision
+                }
+            ),
+            config=config,
+        ):
+
+            chunk_final_content = (
+                _handle_agent_chunk(
+                    chunk
+                )
+            )
+
+            if chunk_final_content:
+                final_content = (
+                    chunk_final_content
+                )
+
+
+        # 修改：
+        # Resume 后 Main Agent 如果最终形成回答，
+        # 继续使用原项目已有 Monitor 链路发送前端。
+        if final_content:
+
+            print(
+                "HITL 恢复后最终结果："
+                f"{final_content[:100]}"
+            )
+
+            monitor.report_task_result(
+                final_content
+            )
+
+
+        return {
+            "status": "completed",
+            "thread_id": session_id,
+            "decision": decision,
+            "final_content": final_content,
+        }
+
+
+    except Exception as e:
+
+        monitor._emit(
+            "error",
+            (
+                "恢复 HITL Agent 失败："
+                f"{str(e)}"
+            ),
+        )
+
+        raise
+
+
+    finally:
+
+        reset_session_context(
+            session_dir_token,
+            session_id_token,
+        )

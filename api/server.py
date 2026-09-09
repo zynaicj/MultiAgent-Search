@@ -29,6 +29,8 @@ from agent.main_agent import (
     run_deep_agent,
     init_main_agent,
     close_main_agent,
+    # 修改：HITL 恢复入口
+    resume_deep_agent,
 )
 # 修改：导入新开发的多 Agent 协作工作流入口
 from agent.collaboration.runner import (
@@ -80,6 +82,16 @@ class TaskRequest(BaseModel):
         "collaboration",
     ] = "deep_agent"
 
+
+# 修改：Human-in-the-Loop 人工审批请求
+class ApprovalRequest(BaseModel):
+
+    thread_id: str
+
+    decision: Literal[
+        "approve",
+        "reject",
+    ]
 
 @app.on_event("startup")
 async def startup_event():
@@ -136,6 +148,34 @@ async def run_task(request: TaskRequest):
         "thread_id": thread_id,
         "mode": request.mode,
     }
+
+
+# 修改：Human-in-the-Loop 审批接口
+@app.post("/api/approval")
+async def approve_tool(
+    request: ApprovalRequest
+):
+
+    # 修改：
+    # 异步恢复对应 thread_id 下
+    # 被 interrupt 暂停的 Main Agent。
+    asyncio.create_task(
+        resume_deep_agent(
+            session_id=request.thread_id,
+            decision=request.decision,
+        )
+    )
+
+
+    return {
+        "status": "resuming",
+        "thread_id":
+            request.thread_id,
+
+        "decision":
+            request.decision,
+    }
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

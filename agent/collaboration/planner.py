@@ -1,5 +1,4 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-
 from agent.llm import model
 from agent.collaboration.schemas import TaskPlan
 from agent.collaboration.state import CollaborationState
@@ -64,33 +63,23 @@ PLANNER_SYSTEM_PROMPT = """
 """
 
 
-planner_parser = PydanticOutputParser(
-    pydantic_object=TaskPlan
-)
+planner_parser = PydanticOutputParser(pydantic_object=TaskPlan)
 
-async def planner_node(
-    state: CollaborationState
-) -> dict:
+
+async def planner_node(state: CollaborationState) -> dict:
     """
     根据用户问题生成结构化的多智能体任务计划。
     """
 
     query = state["query"]
 
-    monitor._emit(
-        "collaboration_planner_start",
-        "Planner 开始分析并拆解任务",
-        {}
-    )
+    monitor._emit("collaboration_planner_start", "Planner 开始分析并拆解任务", {})
 
-    format_instructions = (
-        planner_parser.get_format_instructions()
-    )
+    format_instructions = planner_parser.get_format_instructions()
 
-    response = await model.ainvoke(
-        [
-            SystemMessage(
-                content=f"""
+    response = await model.ainvoke([
+        SystemMessage(
+            content=f"""
 {PLANNER_SYSTEM_PROMPT}
 
 你必须严格按照下面给出的 JSON 格式返回结果。
@@ -104,33 +93,18 @@ async def planner_node(
 
 只返回合法 JSON，不要输出 JSON 之外的任何文字。
 """
-            ),
-            HumanMessage(
-                content=f"""
+        ),
+        HumanMessage(
+            content=f"""
 请为下面的用户任务生成执行计划：
 
 {query}
 """
-            ),
-        ]
-    )
+        ),
+    ])
 
-    plan = planner_parser.parse(
-        response.content
-    )
+    plan = planner_parser.parse(response.content)
 
-    monitor._emit(
-        "collaboration_plan_created",
-        f"Planner 已生成 {len(plan.tasks)} 个子任务",
-        {
-            "goal": plan.goal,
-            "tasks": [
-                task.model_dump()
-                for task in plan.tasks
-            ],
-        }
-    )
+    monitor._emit("collaboration_plan_created", f"Planner 已生成 {len(plan.tasks)} 个子任务", {"goal": plan.goal, "tasks": [task.model_dump() for task in plan.tasks]})
 
-    return {
-        "plan": plan
-    }
+    return {"plan": plan}

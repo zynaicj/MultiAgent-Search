@@ -1,9 +1,11 @@
 import os
+from datetime import datetime, timezone
 
+from bson import ObjectId
 from dotenv import load_dotenv
 from pymongo import AsyncMongoClient
 
-from agent.memory.schemas import MemoryRecord
+from agent.memory.schemas import MemoryRecord, MemoryType
 
 
 load_dotenv()
@@ -30,6 +32,7 @@ class MemoryRepository:
     1. 建立 MongoDB 连接
     2. 保存 Memory
     3. 查询 Memory
+    4. 更新 Memory
 
     不负责 LLM 提取、
     Prompt 构建和 Workflow 调度。
@@ -78,6 +81,66 @@ class MemoryRepository:
         return str(
             result.inserted_id
         )
+
+    async def get_memories_by_type(
+        self,
+        memory_type: MemoryType,
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        查询指定类型的长期记忆。
+
+        当前主要提供给 Memory Manager
+        做重复和更新判断。
+
+        后续引入向量检索后，
+        会改成只召回语义相关的记忆。
+        """
+
+        cursor = self.collection.find(
+            {
+                "memory_type": memory_type,
+            }
+        ).sort(
+            "created_at",
+            -1,
+        )
+
+        memories = await cursor.to_list(
+            length=limit
+        )
+
+        for memory in memories:
+            memory["_id"] = str(
+                memory["_id"]
+            )
+
+        return memories
+
+    async def update_memory(
+        self,
+        memory_id: str,
+        content: str,
+    ) -> bool:
+        """
+        更新指定长期记忆的内容。
+        """
+
+        result = await self.collection.update_one(
+            {
+                "_id": ObjectId(memory_id),
+            },
+            {
+                "$set": {
+                    "content": content,
+                    "updated_at": datetime.now(
+                        timezone.utc
+                    ),
+                }
+            },
+        )
+
+        return result.matched_count > 0
 
     async def get_all_memories(
         self,

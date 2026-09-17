@@ -11,13 +11,16 @@ MemoryType = Literal[
     "decision",
 ]
 
+MemoryAction = Literal[
+    "add",
+    "skip",
+    "update",
+]
+
 
 class MemoryCandidate(BaseModel):
     """
     LLM 从用户输入中提取出来的一条候选长期记忆。
-
-    这里只表示“提取结果”，
-    还没有真正写入 MongoDB。
     """
 
     memory_type: MemoryType = Field(
@@ -39,11 +42,6 @@ class MemoryCandidate(BaseModel):
 class MemoryExtractionResult(BaseModel):
     """
     一次长期记忆提取的结构化结果。
-
-    一条用户输入可能：
-    1. 不包含长期记忆 -> memories=[]
-    2. 包含一条长期记忆
-    3. 同时包含多条长期记忆
     """
 
     memories: list[MemoryCandidate] = Field(
@@ -67,3 +65,44 @@ class MemoryRecord(BaseModel):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+
+class MemoryManagementDecision(BaseModel):
+    """
+    Memory Manager 对一条新记忆做出的管理决策。
+    """
+
+    action: MemoryAction = Field(
+        description=(
+            "add 表示新增；"
+            "skip 表示与已有记忆重复；"
+            "update 表示新记忆应该替换某条旧记忆"
+        )
+    )
+
+    target_memory_id: str | None = Field(
+        default=None,
+        description="skip 或 update 对应的已有 MongoDB 记忆 ID；add 时为空",
+    )
+
+    final_content: str = Field(
+        min_length=1,
+        description="执行操作后应该保留的最终长期记忆内容",
+    )
+
+    reason: str = Field(
+        min_length=1,
+        description="做出当前记忆管理决策的简短原因",
+    )
+
+
+class MemoryProcessResult(BaseModel):
+    """
+    Service 层执行完记忆管理后的结果。
+    """
+
+    action: MemoryAction
+    memory_id: str | None
+    memory_type: MemoryType
+    content: str
+    reason: str

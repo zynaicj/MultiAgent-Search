@@ -5,9 +5,10 @@ from agent.memory.service import extract_and_manage_memories
 
 async def recall_memory_context(
     user_query: str,
+    runtime_context: str = "",
 ) -> str:
     """
-    根据当前用户问题召回长期记忆。
+    根据当前用户问题和运行时上下文召回长期记忆。
 
     只返回 Memory Context，
     不负责把它和用户问题拼接。
@@ -18,13 +19,15 @@ async def recall_memory_context(
     """
 
     user_query = user_query.strip()
+    runtime_context = runtime_context.strip()
 
     if not user_query:
         return ""
 
     try:
         memory_context = await build_memory_context(
-            user_query
+            query=user_query,
+            runtime_context=runtime_context,
         )
 
     except Exception as e:
@@ -51,12 +54,13 @@ async def recall_memory_context(
 
 async def build_memory_augmented_query(
     user_query: str,
+    runtime_context: str = "",
 ) -> str:
     """
     为普通 Agent 构造：
     长期记忆 + 用户当前问题。
 
-    DeepAgent 后续仍然可以使用这个方法。
+    DeepAgent 后续可以使用这个方法。
 
     Collaboration 模式不直接使用它，
     而是把 query 和 memory_context
@@ -69,7 +73,8 @@ async def build_memory_augmented_query(
         return user_query
 
     memory_context = await recall_memory_context(
-        user_query
+        user_query=user_query,
+        runtime_context=runtime_context,
     )
 
     if not memory_context:

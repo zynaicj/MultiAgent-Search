@@ -16,6 +16,13 @@ from api.monitor import monitor
 project_root_path = Path(__file__).parents[2].resolve()
 
 
+COLLABORATION_MEMORY_RUNTIME_CONTEXT = (
+    "当前运行模式：多 Agent 协作模式。"
+    "最终答案由多 Agent 协作工作流中的 "
+    "Synthesizer 综合生成。"
+)
+
+
 async def run_collaboration_agent(
     task_query: str,
     session_id: str,
@@ -26,7 +33,7 @@ async def run_collaboration_agent(
     负责：
     1. 创建当前任务工作目录
     2. 设置 session/thread ContextVar
-    3. 根据用户原始问题召回长期记忆
+    3. 根据用户原始问题和运行模式召回长期记忆
     4. 将原始 query 和 memory_context 分开传入 Graph
     5. 运行 collaboration_graph
     6. 将最终结果通过 Monitor 推送
@@ -70,26 +77,12 @@ async def run_collaboration_agent(
             session_dir_str
         )
 
-        # --------------------------------------------------
-        # 长期记忆召回
-        #
-        # 注意：
-        # query 和 memory_context 必须保持独立。
-        # --------------------------------------------------
-
         memory_context = await recall_memory_context(
-            task_query
+            user_query=task_query,
+            runtime_context=(
+                COLLABORATION_MEMORY_RUNTIME_CONTEXT
+            ),
         )
-
-        # --------------------------------------------------
-        # 执行多 Agent 协作工作流
-        #
-        # query：
-        # 用户真正的原始问题
-        #
-        # memory_context：
-        # Recall 出来的长期记忆辅助信息
-        # --------------------------------------------------
 
         result = await collaboration_graph.ainvoke(
             {
@@ -138,7 +131,6 @@ async def run_collaboration_agent(
         raise
 
     finally:
-        # 这里只处理真正的用户原始输入。
         await remember_user_input(
             task_query
         )

@@ -106,3 +106,16 @@ class MemoryProcessResult(BaseModel):
     memory_type: MemoryType
     content: str
     reason: str
+
+
+class MemoryRecallSelection(BaseModel):
+    """
+    Memory Recall 对当前问题选择出的相关长期记忆。
+    """
+
+    memory_ids: list[str] = Field(
+        default_factory=list,
+        description="与当前用户问题真正相关的长期记忆 ID；没有相关记忆时为空列表",
+    )
+
+    

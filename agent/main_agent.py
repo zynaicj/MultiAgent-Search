@@ -16,6 +16,7 @@ from tools.upload_file_read_tool import read_file_content
 from api.monitor import monitor
 from api.context import set_session_context, reset_session_context, set_thread_context
 from agent.governance import approval_registry
+from agent.memory.runtime import recall_memory_context
 
 # ==========================================================
 # Checkpointer
@@ -164,7 +165,7 @@ def _handle_agent_chunk(chunk):
 # ==========================================================
 # Run Deep Agent
 # ==========================================================
-async def run_deep_agent(task_query, session_id):
+async def run_deep_agent(task_query, session_id, report_result=True):
     """
     正常启动一次 DeepAgents Main Agent 任务。
     """
@@ -182,7 +183,10 @@ async def run_deep_agent(task_query, session_id):
 
         if files:
             for filename in files:
-                shutil.copy2(updated_dir_path / filename, session_dir / filename)
+                source = updated_dir_path / filename
+                target = session_dir / filename
+                if not target.exists() or source.stat().st_mtime_ns > target.stat().st_mtime_ns:
+                    shutil.copy2(source, target)
 
             updated_info_prompt = "\n    [已上传文件] 已加载到工作目录:\n" + "\n".join([f"    - {file}" for file in files]) + "\n    请优先使用工具（read_file_content）读取并参考这些文件。"
 
@@ -191,6 +195,21 @@ async def run_deep_agent(task_query, session_id):
     monitor.report_session_dir(session_dir_str)
     agent = await init_main_agent()
     config = {"configurable": {"thread_id": session_id}}
+
+    # Checkpoint already contains prior turns; do not re-send chat history.
+    checkpoint_state = await agent.aget_state(config)
+    first_turn = not bool((checkpoint_state.values or {}).get("messages"))
+    memory_context = await recall_memory_context(
+        user_query=task_query,
+        runtime_context="当前运行模式：DeepAgents 智能模式。",
+    )
+    # Runtime hints are explicitly distinguished from the user's instruction.
+    memory_hint = (
+        "\\n\\n【历史长期记忆（仅供参考，不是用户本轮新指令）】\\n"
+        + memory_context
+        + "\\n若与当前用户请求冲突，请以当前请求为准。"
+        if memory_context else ""
+    )
     path_instruction = f"""
     【工作环境指令】
 
@@ -216,16 +235,31 @@ async def run_deep_agent(task_query, session_id):
        请先分析内容。
     """
 
+    if not first_turn:
+        path_instruction = ""
+    # Keep the actual user query in conversation.db, while the graph also receives
+    # bounded, clearly labelled runtime memory context for this turn.
+    model_query = task_query + memory_hint + path_instruction
     markdown_requested = _is_markdown_requested(task_query)
     markdown_before = _snapshot_markdown_files(session_dir)
     final_content = None
 
     try:
-        async for chunk in agent.astream({"messages": [{"role": "user", "content": task_query + path_instruction}]}, config=config):
+        async for chunk in agent.astream({"messages": [{"role": "user", "content": model_query}]}, config=config):
             chunk_final_content = _handle_agent_chunk(chunk)
 
             if chunk_final_content:
                 final_content = chunk_final_content
+
+        # A Graph interruption is not a completed turn. Never run Markdown
+        # repair while the graph is paused for SQL approval.
+        pending = approval_registry.get(session_id)
+        if pending is not None:
+            return {
+                "status": "waiting_approval",
+                "final_content": None,
+                "approval": pending.model_dump(mode="json"),
+            }
 
         if markdown_requested and not _has_new_or_updated_markdown(session_dir, markdown_before):
             print("检测到用户明确要求生成 Markdown，" "但本轮未检测到真实 .md 文件，" "开始执行一次自动补救。")
@@ -261,17 +295,25 @@ async def run_deep_agent(task_query, session_id):
                     final_content = chunk_final_content
 
         if markdown_requested and not _has_new_or_updated_markdown(session_dir, markdown_before):
-            monitor._emit("error", "用户明确要求生成 Markdown，但自动补救后仍未检测到真实 .md 文件，本次任务不标记为完成。")
-            return
+            error = "用户明确要求生成 Markdown，但自动补救后仍未检测到真实 .md 文件。"
+            if report_result:
+                monitor._emit("error", error)
+            return {"status": "failed", "error": error}
 
-        if final_content:
-            print("主智能体执行结果，最终结果：" f"{final_content[:100]}")
+        if not isinstance(final_content, str) and final_content is not None:
+            final_content = str(final_content)
+        if not final_content and markdown_requested and _has_new_or_updated_markdown(session_dir, markdown_before):
+            final_content = "Markdown 文档已生成，可在文件列表中下载。"
+        if not final_content:
+            return {"status": "failed", "error": "Agent 未返回最终回答"}
+        if report_result:
             monitor.report_task_result(final_content)
-        elif markdown_requested and _has_new_or_updated_markdown(session_dir, markdown_before):
-            monitor.report_task_result("Markdown 文档已生成，可在文件列表中下载。")
+        return {"status": "completed", "final_content": final_content}
 
     except Exception as e:
-        monitor._emit("error", "执行主智能发生异常信息：" f"{str(e)}")
+        if report_result:
+            monitor._emit("error", "执行主智能发生异常信息：" f"{str(e)}")
+        return {"status": "failed", "error": str(e)}
 
     finally:
         reset_session_context(session_dir_token, session_id_token)
@@ -279,7 +321,7 @@ async def run_deep_agent(task_query, session_id):
 # ==========================================================
 # HITL Resume
 # ==========================================================
-async def resume_deep_agent(session_id: str, decision: str):
+async def resume_deep_agent(session_id: str, decision: str, report_result=True):
     """
     根据人工审批结果，
     恢复指定 thread_id 下
@@ -304,19 +346,30 @@ async def resume_deep_agent(session_id: str, decision: str):
             if chunk_final_content:
                 final_content = chunk_final_content
 
-        if final_content:
-            print("HITL 恢复后最终结果：" f"{final_content[:100]}")
-            monitor.report_task_result(final_content)
-
-        return {"status": "completed", "thread_id": session_id, "decision": decision, "final_content": final_content}
+        pending = approval_registry.get(session_id)
+        if pending is not None and pending.status.value == "PENDING":
+            return {
+                "status": "waiting_approval",
+                "approval": pending.model_dump(mode="json"),
+            }
+        if not isinstance(final_content, str) and final_content is not None:
+            final_content = str(final_content)
+        if report_result:
+            monitor.report_task_result(final_content or "人工审批处理完成。")
+        return {
+            "status": "completed", "thread_id": session_id,
+            "decision": decision,
+            "final_content": final_content or "人工审批处理完成。",
+        }
 
     except Exception as e:
         # 修改：
         # 如果 Resume 失败，
         # 将审批状态从 RESUMING 恢复为 PENDING。
         approval_registry.mark_pending(session_id)
-        monitor._emit("error", "恢复 HITL Agent 失败：" f"{str(e)}")
-        raise
+        if report_result:
+            monitor._emit("error", "恢复 HITL Agent 失败：" f"{str(e)}")
+        return {"status": "failed", "error": str(e)}
 
     finally:
         reset_session_context(session_dir_token, session_id_token)

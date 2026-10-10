@@ -5,6 +5,7 @@ import json
 from agent.governance import approval_registry
 from agent.governance.models import PendingApproval
 from agent.main_agent import run_deep_agent, resume_deep_agent
+from agent.collaboration.runner import run_collaboration_agent
 from agent.memory.runtime import remember_user_input
 from api.chat import store
 from api.context import set_run_context, reset_run_context, set_thread_context, reset_thread_context
@@ -15,7 +16,24 @@ async def run_turn(cid: str, rid: str, query: str):
     run_token = set_run_context(rid)
     thread_token = set_thread_context(cid)
     try:
-        result = await run_deep_agent(query, cid, report_result=False)
+        conversation = store.get_conversation(cid)
+        if not conversation:
+            raise RuntimeError("会话已不存在")
+        if conversation["mode"] == "collaboration":
+            previous = [m for m in store.list_messages(cid) if m.get("run_id") != rid][-6:]
+            history_context = "\\n".join(
+                ("用户" if m["role"] == "user" else "Agent") + "：" + m["content"][:800]
+                for m in previous
+            )
+            graph_result = await run_collaboration_agent(
+                query, cid, report_result=False, history_context=history_context
+            )
+            if not graph_result.get("final_answer"):
+                result = {"status": "failed", "error": "协作工作流未生成最终回答"}
+            else:
+                result = {"status": "completed", "final_content": graph_result["final_answer"]}
+        else:
+            result = await run_deep_agent(query, cid, report_result=False)
         status = result.get("status", "failed")
         if status == "waiting_approval":
             approval = result.get("approval")
@@ -30,7 +48,8 @@ async def run_turn(cid: str, rid: str, query: str):
         answer = result.get("final_content") or "任务已完成，但未返回文本结果。"
         store.finish_run(rid, "completed", answer=answer)
         monitor.report_task_result(answer)
-        await remember_user_input(query)
+        if conversation["mode"] == "deep_agent":
+            await remember_user_input(query)
     except Exception as exc:
         store.finish_run(rid, "failed", error=str(exc))
         monitor._emit("error", f"执行失败：{exc}", {"run_id": rid})

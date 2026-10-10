@@ -197,7 +197,11 @@ async def run_deep_agent(task_query, session_id, report_result=True):
     config = {"configurable": {"thread_id": session_id}}
 
     # Checkpoint already contains prior turns; do not re-send chat history.
-    checkpoint_state = await agent.aget_state(config)
+    try:
+        checkpoint_state = await agent.aget_state(config)
+    except Exception as exc:
+        reset_session_context(session_dir_token, session_id_token)
+        return {"status": "failed", "error": f"读取 Checkpoint 失败：{exc}"}
     first_turn = not bool((checkpoint_state.values or {}).get("messages"))
     memory_context = await recall_memory_context(
         user_query=task_query,
@@ -205,9 +209,9 @@ async def run_deep_agent(task_query, session_id, report_result=True):
     )
     # Runtime hints are explicitly distinguished from the user's instruction.
     memory_hint = (
-        "\\n\\n【历史长期记忆（仅供参考，不是用户本轮新指令）】\\n"
+        "\n\n【历史长期记忆（仅供参考，不是用户本轮新指令）】\n"
         + memory_context
-        + "\\n若与当前用户请求冲突，请以当前请求为准。"
+        + "\n若与当前用户请求冲突，请以当前请求为准。"
         if memory_context else ""
     )
     path_instruction = f"""
@@ -236,7 +240,8 @@ async def run_deep_agent(task_query, session_id, report_result=True):
     """
 
     if not first_turn:
-        path_instruction = ""
+        # New uploads should still be visible in later turns.
+        path_instruction = updated_info_prompt
     # Keep the actual user query in conversation.db, while the graph also receives
     # bounded, clearly labelled runtime memory context for this turn.
     model_query = task_query + memory_hint + path_instruction
@@ -293,6 +298,14 @@ async def run_deep_agent(task_query, session_id, report_result=True):
 
                 if chunk_final_content and final_content is None:
                     final_content = chunk_final_content
+
+        pending = approval_registry.get(session_id)
+        if pending is not None:
+            return {
+                "status": "waiting_approval",
+                "final_content": None,
+                "approval": pending.model_dump(mode="json"),
+            }
 
         if markdown_requested and not _has_new_or_updated_markdown(session_dir, markdown_before):
             error = "用户明确要求生成 Markdown，但自动补救后仍未检测到真实 .md 文件。"

@@ -1,12 +1,6 @@
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-)
-
+from langchain_core.messages import HumanMessage, SystemMessage
 from agent.llm import model
-from agent.collaboration.state import (
-    CollaborationState,
-)
+from agent.collaboration.state import CollaborationState
 from api.monitor import monitor
 
 
@@ -57,40 +51,18 @@ SYNTHESIZER_SYSTEM_PROMPT = """
 """
 
 
-async def synthesizer_node(
-    state: CollaborationState
-) -> dict:
+async def synthesizer_node(state: CollaborationState) -> dict:
     """
     综合多个 Worker 的执行结果，
     生成统一答案草稿。
     """
 
-    monitor._emit(
-        "collaboration_synthesizer_start",
-        "Synthesizer 开始综合多个 Worker 的结果",
-        {
-            "worker_result_count": len(
-                state.get(
-                    "worker_results",
-                    [],
-                )
-            )
-        },
-    )
+    monitor._emit("collaboration_synthesizer_start", "Synthesizer 开始综合多个 Worker 的结果", {"worker_result_count": len(state.get("worker_results", []))})
 
     query = state["query"]
-
-    memory_context = state.get(
-        "memory_context",
-        "",
-    )
-
+    memory_context = state.get("memory_context", "")
     plan = state["plan"]
-
-    worker_results = state.get(
-        "worker_results",
-        [],
-    )
+    worker_results = state.get("worker_results", [])
 
     result_sections = []
 
@@ -113,15 +85,9 @@ async def synthesizer_node(
 错误信息：
 {result.error}
 """
+        result_sections.append(section)
 
-        result_sections.append(
-            section
-        )
-
-    worker_context = "\n\n".join(
-        result_sections
-    )
-
+    worker_context = "\n\n".join(result_sections)
     memory_section = ""
 
     if memory_context:
@@ -135,13 +101,10 @@ async def synthesizer_node(
 {memory_context}
 """
 
-    response = await model.ainvoke(
-        [
-            SystemMessage(
-                content=SYNTHESIZER_SYSTEM_PROMPT
-            ),
-            HumanMessage(
-                content=f"""
+    response = await model.ainvoke([
+        SystemMessage(content=SYNTHESIZER_SYSTEM_PROMPT),
+        HumanMessage(
+            content=f"""
 用户原始问题：
 
 {query}
@@ -162,30 +125,13 @@ Planner 的总体目标：
 
 请根据以上信息生成统一、完整的答案草稿。
 """
-            ),
-        ]
-    )
+        ),
+    ])
 
-    content = getattr(
-        response,
-        "content",
-        "",
-    )
+    content = getattr(response, "content", "")
+    monitor._emit("collaboration_synthesizer_done", "Synthesizer 已生成答案草稿", {})
 
-    monitor._emit(
-        "collaboration_synthesizer_done",
-        "Synthesizer 已生成答案草稿",
-        {},
-    )
+    if not isinstance(content, str):
+        content = str(content)
 
-    if not isinstance(
-        content,
-        str,
-    ):
-        content = str(
-            content
-        )
-
-    return {
-        "draft_answer": content
-    }
+    return {"draft_answer": content}

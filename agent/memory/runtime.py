@@ -3,10 +3,7 @@ from agent.memory.schemas import MemoryProcessResult
 from agent.memory.service import extract_and_manage_memories
 
 
-async def recall_memory_context(
-    user_query: str,
-    runtime_context: str = "",
-) -> str:
+async def recall_memory_context(user_query: str, runtime_context: str = "") -> str:
     """
     根据当前用户问题和运行时上下文召回长期记忆。
 
@@ -25,37 +22,20 @@ async def recall_memory_context(
         return ""
 
     try:
-        memory_context = await build_memory_context(
-            query=user_query,
-            runtime_context=runtime_context,
-        )
-
+        memory_context = await build_memory_context(query=user_query, runtime_context=runtime_context)
     except Exception as e:
-        print(
-            "[Memory] 长期记忆召回失败，"
-            f"本轮退化为无记忆模式：{e}"
-        )
-
+        print(f"[Memory] 长期记忆召回失败，本轮退化为无记忆模式：{e}")
         return ""
 
     if not memory_context:
-        print(
-            "[Memory] 本轮没有召回相关长期记忆"
-        )
-
+        print("[Memory] 本轮没有召回相关长期记忆")
         return ""
 
-    print(
-        "[Memory] 已召回相关长期记忆"
-    )
-
+    print("[Memory] 已召回相关长期记忆")
     return memory_context
 
 
-async def build_memory_augmented_query(
-    user_query: str,
-    runtime_context: str = "",
-) -> str:
+async def build_memory_augmented_query(user_query: str, runtime_context: str = "") -> str:
     """
     为普通 Agent 构造：
     长期记忆 + 用户当前问题。
@@ -72,10 +52,7 @@ async def build_memory_augmented_query(
     if not user_query:
         return user_query
 
-    memory_context = await recall_memory_context(
-        user_query=user_query,
-        runtime_context=runtime_context,
-    )
+    memory_context = await recall_memory_context(user_query=user_query, runtime_context=runtime_context)
 
     if not memory_context:
         return user_query
@@ -101,9 +78,7 @@ async def build_memory_augmented_query(
 """.strip()
 
 
-async def remember_user_input(
-    user_query: str,
-) -> list[MemoryProcessResult]:
+async def remember_user_input(user_query: str) -> list[MemoryProcessResult]:
     """
     从用户原始输入中提取并管理长期记忆。
 
@@ -117,31 +92,16 @@ async def remember_user_input(
         return []
 
     try:
-        results = await extract_and_manage_memories(
-            user_query
-        )
-
+        results = await extract_and_manage_memories(user_query)
     except Exception as e:
-        print(
-            "[Memory] 长期记忆写入失败，"
-            f"不会影响当前任务：{e}"
-        )
-
+        print(f"[Memory] 长期记忆写入失败，不会影响当前任务：{e}")
         return []
 
     if not results:
-        print(
-            "[Memory] 本轮用户输入没有需要保存的长期记忆"
-        )
-
+        print("[Memory] 本轮用户输入没有需要保存的长期记忆")
         return []
 
     for result in results:
-        print(
-            "[Memory] "
-            f"action={result.action}, "
-            f"type={result.memory_type}, "
-            f"content={result.content}"
-        )
+        print(f"[Memory] action={result.action}, type={result.memory_type}, content={result.content}")
 
     return results

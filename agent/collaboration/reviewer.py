@@ -1,19 +1,8 @@
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-)
-from langchain_core.output_parsers import (
-    PydanticOutputParser,
-)
-
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import PydanticOutputParser
 from agent.llm import model
-from agent.collaboration.schemas import (
-    ReviewResult,
-)
-from agent.collaboration.state import (
-    CollaborationState,
-)
-
+from agent.collaboration.schemas import ReviewResult
+from agent.collaboration.state import CollaborationState
 from api.monitor import monitor
 
 
@@ -72,33 +61,21 @@ REVIEWER_SYSTEM_PROMPT = """
 """
 
 
-reviewer_parser = PydanticOutputParser(
-    pydantic_object=ReviewResult
-)
+reviewer_parser = PydanticOutputParser(pydantic_object=ReviewResult)
 
 
-async def reviewer_node(
-    state: CollaborationState
-) -> dict:
+async def reviewer_node(state: CollaborationState) -> dict:
     """
     审核 Synthesizer 生成的答案草稿，
     返回结构化 ReviewResult。
     """
 
-    monitor._emit(
-        "collaboration_reviewer_start",
-        "Reviewer 开始审核答案草稿",
-        {}
-    )
+    monitor._emit("collaboration_reviewer_start", "Reviewer 开始审核答案草稿", {})
 
     query = state["query"]
     plan = state["plan"]
     draft_answer = state["draft_answer"]
-
-    worker_results = state.get(
-        "worker_results",
-        []
-    )
+    worker_results = state.get("worker_results", [])
 
     worker_sections = []
 
@@ -121,21 +98,14 @@ async def reviewer_node(
 错误：
 {result.error}
 """
-
         worker_sections.append(section)
 
-    worker_context = "\n\n".join(
-        worker_sections
-    )
+    worker_context = "\n\n".join(worker_sections)
+    format_instructions = reviewer_parser.get_format_instructions()
 
-    format_instructions = (
-        reviewer_parser.get_format_instructions()
-    )
-
-    response = await model.ainvoke(
-        [
-            SystemMessage(
-                content=f"""
+    response = await model.ainvoke([
+        SystemMessage(
+            content=f"""
 {REVIEWER_SYSTEM_PROMPT}
 
 你必须严格按照下面指定的 JSON 格式返回审核结果。
@@ -154,9 +124,9 @@ async def reviewer_node(
 只返回合法 JSON，
 不要输出 JSON 之外的任何文字。
 """
-            ),
-            HumanMessage(
-                content=f"""
+        ),
+        HumanMessage(
+            content=f"""
 请审核下面这次多智能体协作任务。
 
 
@@ -182,41 +152,16 @@ async def reviewer_node(
 
 请判断当前答案是否已经达到最终交付标准。
 """
-            ),
-        ]
-    )
+        ),
+    ])
 
-    content = getattr(
-        response,
-        "content",
-        ""
-    )
+    content = getattr(response, "content", "")
 
     if not isinstance(content, str):
         content = str(content)
 
-    review = reviewer_parser.parse(
-        content
-    )
+    review = reviewer_parser.parse(content)
 
-    monitor._emit(
-        "collaboration_review_done",
-        (
-            f"Reviewer 审核完成，"
-            f"score={review.score:.2f}，"
-            f"passed={review.passed}"
-        ),
-        {
-            "passed": review.passed,
-            "score": review.score,
-            "feedback": review.feedback,
-            "missing_items": review.missing_items,
-            "retry_task_count": len(
-                review.retry_tasks
-            ),
-        }
-    )
+    monitor._emit("collaboration_review_done", f"Reviewer 审核完成，score={review.score:.2f}，passed={review.passed}", {"passed": review.passed, "score": review.score, "feedback": review.feedback, "missing_items": review.missing_items, "retry_task_count": len(review.retry_tasks)})
 
-    return {
-        "review": review
-    }
+    return {"review": review}

@@ -171,19 +171,10 @@ MultiAgent-Search 的长期记忆使用 MongoDB 存储。
 """
 
 
-structured_memory_recaller = (
-    memory_extractor_model.with_structured_output(
-        MemoryRecallSelection,
-        method="function_calling",
-    )
-)
+structured_memory_recaller = memory_extractor_model.with_structured_output(MemoryRecallSelection, method="function_calling")
 
 
-async def recall_memories(
-    query: str,
-    runtime_context: str = "",
-    limit: int = 5,
-) -> list[dict]:
+async def recall_memories(query: str, runtime_context: str = "", limit: int = 5) -> list[dict]:
     """
     根据当前用户问题和运行时上下文，
     召回真正相关的长期记忆。
@@ -195,72 +186,29 @@ async def recall_memories(
     if not query:
         return []
 
-    memories = (
-        await memory_repository.get_all_memories()
-    )
+    memories = await memory_repository.get_all_memories()
 
     if not memories:
         return []
 
-    memory_text = "\n".join(
-        (
-            f"- id: {memory['_id']}\n"
-            f"  type: {memory['memory_type']}\n"
-            f"  content: {memory['content']}"
-        )
-        for memory in memories
-    )
+    memory_text = "\n".join(f"- id: {memory['_id']}\n  type: {memory['memory_type']}\n  content: {memory['content']}" for memory in memories)
+    runtime_context_text = runtime_context if runtime_context else "无额外运行时上下文"
 
-    runtime_context_text = (
-        runtime_context
-        if runtime_context
-        else "无额外运行时上下文"
-    )
+    selection = await structured_memory_recaller.ainvoke([
+        ("system", MEMORY_RECALL_PROMPT),
+        ("human", f"用户当前问题：\n{query}\n\n当前运行时上下文：\n{runtime_context_text}\n\n候选长期记忆：\n{memory_text}"),
+    ])
 
-    selection = (
-        await structured_memory_recaller.ainvoke(
-            [
-                (
-                    "system",
-                    MEMORY_RECALL_PROMPT,
-                ),
-                (
-                    "human",
-                    (
-                        "用户当前问题：\n"
-                        f"{query}\n\n"
-                        "当前运行时上下文：\n"
-                        f"{runtime_context_text}\n\n"
-                        "候选长期记忆：\n"
-                        f"{memory_text}"
-                    ),
-                ),
-            ]
-        )
-    )
-
-    memory_map = {
-        memory["_id"]: memory
-        for memory in memories
-    }
-
+    memory_map = {memory["_id"]: memory for memory in memories}
     recalled_memories = []
     seen_ids = set()
 
     for memory_id in selection.memory_ids:
-        if memory_id not in memory_map:
+        if memory_id not in memory_map or memory_id in seen_ids:
             continue
 
-        if memory_id in seen_ids:
-            continue
-
-        recalled_memories.append(
-            memory_map[memory_id]
-        )
-
-        seen_ids.add(
-            memory_id
-        )
+        recalled_memories.append(memory_map[memory_id])
+        seen_ids.add(memory_id)
 
         if len(recalled_memories) >= limit:
             break
@@ -268,9 +216,7 @@ async def recall_memories(
     return recalled_memories
 
 
-def format_memory_context(
-    memories: list[dict],
-) -> str:
+def format_memory_context(memories: list[dict]) -> str:
     """
     将召回结果整理成可以提供给 Agent 的上下文。
     """
@@ -278,43 +224,20 @@ def format_memory_context(
     if not memories:
         return ""
 
-    memory_lines = [
-        (
-            "以下是与当前任务真正相关的长期记忆，"
-            "请仅在需要时参考："
-        )
-    ]
+    memory_lines = ["以下是与当前任务真正相关的长期记忆，请仅在需要时参考："]
 
     for memory in memories:
-        memory_lines.append(
-            (
-                f"- [{memory['memory_type']}] "
-                f"{memory['content']}"
-            )
-        )
+        memory_lines.append(f"- [{memory['memory_type']}] {memory['content']}")
 
-    return "\n".join(
-        memory_lines
-    )
+    return "\n".join(memory_lines)
 
 
-async def build_memory_context(
-    query: str,
-    runtime_context: str = "",
-    limit: int = 5,
-) -> str:
+async def build_memory_context(query: str, runtime_context: str = "", limit: int = 5) -> str:
     """
     用户问题 + 运行时上下文
     -> 召回长期记忆
     -> 构造 Agent Memory Context。
     """
 
-    memories = await recall_memories(
-        query=query,
-        runtime_context=runtime_context,
-        limit=limit,
-    )
-
-    return format_memory_context(
-        memories
-    )
+    memories = await recall_memories(query=query, runtime_context=runtime_context, limit=limit)
+    return format_memory_context(memories)

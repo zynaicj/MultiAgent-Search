@@ -1,8 +1,5 @@
 from agent.llm import memory_extractor_model
-from agent.memory.schemas import (
-    MemoryManagementDecision,
-    MemoryRecord,
-)
+from agent.memory.schemas import MemoryManagementDecision, MemoryRecord
 
 
 MEMORY_MANAGEMENT_PROMPT = """
@@ -43,10 +40,7 @@ MEMORY_MANAGEMENT_PROMPT = """
 """
 
 
-structured_memory_manager = memory_extractor_model.with_structured_output(
-    MemoryManagementDecision,
-    method="function_calling",
-)
+structured_memory_manager = memory_extractor_model.with_structured_output(MemoryManagementDecision, method="function_calling")
 
 
 def _normalize_content(content: str) -> str:
@@ -60,30 +54,18 @@ def _normalize_content(content: str) -> str:
     return "".join(content.lower().split())
 
 
-async def decide_memory_action(
-    new_memory: MemoryRecord,
-    existing_memories: list[dict],
-) -> MemoryManagementDecision:
+async def decide_memory_action(new_memory: MemoryRecord, existing_memories: list[dict]) -> MemoryManagementDecision:
     """
     判断新记忆应该 add、skip 还是 update。
     """
 
     if not existing_memories:
-        return MemoryManagementDecision(
-            action="add",
-            final_content=new_memory.content,
-            reason="当前没有同类型长期记忆，因此直接新增",
-        )
+        return MemoryManagementDecision(action="add", final_content=new_memory.content, reason="当前没有同类型长期记忆，因此直接新增")
 
-    normalized_new_content = _normalize_content(
-        new_memory.content
-    )
+    normalized_new_content = _normalize_content(new_memory.content)
 
     for existing_memory in existing_memories:
-        existing_content = existing_memory.get(
-            "content",
-            "",
-        )
+        existing_content = existing_memory.get("content", "")
 
         if _normalize_content(existing_content) == normalized_new_content:
             return MemoryManagementDecision(
@@ -93,31 +75,11 @@ async def decide_memory_action(
                 reason="新记忆与已有记忆内容完全相同",
             )
 
-    existing_memory_text = "\n".join(
-        (
-            f"- id: {memory['_id']}\n"
-            f"  content: {memory.get('content', '')}"
-        )
-        for memory in existing_memories
-    )
+    existing_memory_text = "\n".join(f"- id: {memory['_id']}\n  content: {memory.get('content', '')}" for memory in existing_memories)
 
-    result = await structured_memory_manager.ainvoke(
-        [
-            (
-                "system",
-                MEMORY_MANAGEMENT_PROMPT,
-            ),
-            (
-                "human",
-                (
-                    "新长期记忆：\n"
-                    f"type: {new_memory.memory_type}\n"
-                    f"content: {new_memory.content}\n\n"
-                    "已有同类型长期记忆：\n"
-                    f"{existing_memory_text}"
-                ),
-            ),
-        ]
-    )
+    result = await structured_memory_manager.ainvoke([
+        ("system", MEMORY_MANAGEMENT_PROMPT),
+        ("human", f"新长期记忆：\ntype: {new_memory.memory_type}\ncontent: {new_memory.content}\n\n已有同类型长期记忆：\n{existing_memory_text}"),
+    ])
 
     return result

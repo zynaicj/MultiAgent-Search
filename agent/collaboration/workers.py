@@ -26,7 +26,9 @@ def _create_worker_agent(worker_config: dict):
 
 
 # 程序启动时创建三个可独立执行的 Worker
-WORKER_AGENTS = {worker_name: _create_worker_agent(worker_config) for worker_name, worker_config in WORKER_CONFIGS.items()}
+WORKER_AGENTS = {
+    worker_name: _create_worker_agent(worker_config) for worker_name, worker_config in WORKER_CONFIGS.items()
+    }
 
 
 class WorkerState(TypedDict):

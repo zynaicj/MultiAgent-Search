@@ -53,9 +53,8 @@ MEMORY_EXTRACTION_PROMPT = """
 
 
 structured_memory_model = memory_extractor_model.with_structured_output(
-    MemoryExtractionResult,
-    method="function_calling",
-)
+    MemoryExtractionResult, method="function_calling"
+    )
 
 
 async def extract_memories(user_input: str) -> list[MemoryRecord]:
@@ -73,23 +72,9 @@ async def extract_memories(user_input: str) -> list[MemoryRecord]:
     if not user_input:
         return []
 
-    result = await structured_memory_model.ainvoke(
-        [
-            (
-                "system",
-                MEMORY_EXTRACTION_PROMPT,
-            ),
-            (
-                "human",
-                f"用户本轮输入：\n{user_input}",
-            ),
-        ]
-    )
+    result = await structured_memory_model.ainvoke([
+        ("system", MEMORY_EXTRACTION_PROMPT),
+        ("human", f"用户本轮输入：\n{user_input}"),
+    ])
 
-    return [
-        MemoryRecord(
-            memory_type=memory.memory_type,
-            content=memory.content,
-        )
-        for memory in result.memories
-    ]
+    return [MemoryRecord(memory_type=memory.memory_type, content=memory.content) for memory in result.memories]

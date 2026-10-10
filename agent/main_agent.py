@@ -124,7 +124,8 @@ async def run_deep_agent(task_query,session_id):
     3. 使用相对路径，禁止使用绝对路径
     4. 若存在上传文件，请先分析内容
     """
-    # 反馈结果
+    # 反馈结果：仅在成功结束时返回最终回答，供数据库持久化
+    final_content = None
     try:
         # 执行
         async for chunk in main_agent.astream({
@@ -157,13 +158,16 @@ async def run_deep_agent(task_query,session_id):
                                     # 调用某个子智能体
                                     monitor.report_assistant(tool_call['args']['subagent_type'],{'description':tool_call['args']['description']})
                         elif last_msg.content:
-                            # 最终结果
-                            print(f"主智能体执行结果，最终结果：{last_msg.content[:100]}")
-                            monitor.report_task_result(last_msg.content)
+                            # 记录最终完整回复；不能每个中间消息都当作任务完成
+                            final_content = last_msg.content
 
+        if final_content is None:
+            raise RuntimeError("Agent 未返回最终回答")
+        monitor.report_task_result(str(final_content))
+        return str(final_content)
     except Exception as e :
-        # 报错推送错误信息给前端
-        monitor._emit("error",f"执行主智能发生异常信息：{str(e)}")
+        monitor._emit("error", f"执行主智能发生异常信息：{str(e)}")
+        return None
     finally:
         # 释放存储的地址和session_id
         reset_session_context(session_dir_token, session_id_token)

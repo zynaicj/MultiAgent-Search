@@ -68,6 +68,7 @@ from agent.main_agent import run_deep_agent, init_main_agent, close_main_agent, 
 from agent.collaboration.runner import run_collaboration_agent
 from agent.governance import approval_registry
 from api.monitor import manager
+from api.chat import store, service
 
 
 # ==========================================================
@@ -146,8 +147,160 @@ async def startup_event():
     loop = asyncio.get_running_loop()
     manager.set_loop(loop)
     await init_main_agent()
+    service.recover_runs()
     print(f"[Server] WebSocket Manager bound to loop: {id(loop)}")
 
+
+
+# ==========================================================
+# Durable conversation APIs
+# ==========================================================
+
+class CreateChatRequest(BaseModel):
+    title: str = "新聊天"
+    mode: Literal["deep_agent", "collaboration"] = "deep_agent"
+
+
+class ChatMessageRequest(BaseModel):
+    query: str
+    client_message_id: str
+
+
+class RenameChatRequest(BaseModel):
+    title: str
+
+
+class ChatApprovalRequest(BaseModel):
+    decision: Literal["approve", "reject"]
+
+
+@app.get("/api/conversations")
+async def get_conversations():
+    return {"conversations": store.list_conversations()}
+
+
+@app.post("/api/conversations")
+async def create_conversation(body: CreateChatRequest):
+    return store.create_conversation(title=body.title, mode=body.mode)
+
+
+@app.get("/api/conversations/{cid}")
+async def get_conversation(cid: str):
+    result = store.get_conversation(cid)
+    if not result:
+        raise HTTPException(404, "会话不存在")
+    return result
+
+
+@app.patch("/api/conversations/{cid}")
+async def rename_conversation(cid: str, body: RenameChatRequest):
+    if not body.title.strip():
+        raise HTTPException(422, "标题不能为空")
+    if not store.rename_conversation(cid, body.title):
+        raise HTTPException(404, "会话不存在")
+    return store.get_conversation(cid)
+
+
+@app.delete("/api/conversations/{cid}")
+async def delete_conversation(cid: str):
+    # Refuse to delete while the Agent is working or waiting for approval.
+    result = store.delete_conversation(cid)
+    if result == "missing":
+        raise HTTPException(404, "会话不存在")
+    if result == "busy":
+        raise HTTPException(409, "请先完成当前任务或审批")
+    from agent.main_agent import checkpointer
+    if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
+        await checkpointer.adelete_thread(cid)
+    shutil.rmtree(output_dir / f"session_{cid}", ignore_errors=True)
+    shutil.rmtree(updated_dir / f"session_{cid}", ignore_errors=True)
+    return {"status": "deleted"}
+
+
+@app.get("/api/conversations/{cid}/messages")
+async def get_messages(cid: str):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    return {"messages": store.list_messages(cid)}
+
+
+@app.get("/api/conversations/{cid}/events")
+async def get_events(cid: str, after: int = 0, limit: int = 300):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    return {"events": store.list_events(cid, after=after, limit=limit)}
+
+
+@app.get("/api/conversations/{cid}/files")
+async def get_chat_files(cid: str):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    folder = output_dir / f"session_{cid}"
+    if not folder.exists():
+        return {"files": []}
+    files = []
+    for path in folder.rglob("*"):
+        if path.is_file():
+            files.append({"name": str(path.relative_to(folder)).replace("\\", "/"),
+                          "size": path.stat().st_size})
+    return {"files": files}
+
+
+@app.get("/api/conversations/{cid}/files/{filename:path}")
+async def download_chat_file(cid: str, filename: str):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    base = (output_dir / f"session_{cid}").resolve()
+    path = (base / filename).resolve()
+    if not path.is_relative_to(base) or not path.is_file():
+        raise HTTPException(404, "文件不存在")
+    return FileResponse(path, filename=path.name)
+
+
+@app.get("/api/runs/{rid}")
+async def get_run(rid: str):
+    result = store.get_run(rid)
+    if not result:
+        raise HTTPException(404, "运行不存在")
+    return result
+
+
+@app.post("/api/conversations/{cid}/messages", status_code=202)
+async def send_chat_message(cid: str, body: ChatMessageRequest):
+    query = body.query.strip()
+    if not query or not body.client_message_id.strip():
+        raise HTTPException(422, "消息不能为空")
+    if len(query) > 20000:
+        raise HTTPException(422, "消息过长")
+    status, run = store.begin_run(cid, query, body.client_message_id)
+    if status == "missing":
+        raise HTTPException(404, "会话不存在")
+    if status == "busy":
+        raise HTTPException(409, "该会话仍在执行或等待审批")
+    if status == "started":
+        service.create_background(service.run_turn(cid, run["id"], query))
+    return {"status": status if status == "duplicate" else "running",
+            "conversation_id": cid, "run_id": run["id"]}
+
+
+@app.post("/api/runs/{rid}/approval", status_code=202)
+async def approve_chat_run(rid: str, body: ChatApprovalRequest):
+    run = store.get_run(rid)
+    if not run:
+        raise HTTPException(404, "运行不存在")
+    cid = run["conversation_id"]
+    pending = approval_registry.get(cid)
+    if not pending:
+        raise HTTPException(409, "当前会话没有可恢复的人工审批")
+    if body.decision not in pending.allowed_decisions:
+        raise HTTPException(400, "不支持的审批决定")
+    if store.begin_resume(cid, rid) != "started":
+        raise HTTPException(409, "当前运行不在等待审批状态")
+    if not approval_registry.mark_resuming(cid):
+        store.finish_run(rid, "waiting_approval", approval=pending.model_dump(mode="json"))
+        raise HTTPException(409, "审批正在恢复中")
+    service.create_background(service.resume_turn(cid, rid, body.decision))
+    return {"status": "resuming", "conversation_id": cid, "run_id": rid}
 
 # ==========================================================
 # 启动 Agent Task
@@ -216,12 +369,17 @@ async def upload_files(files: List[UploadFile] = File(...), thread_id: str = For
     updated/session_{thread_id}
     """
 
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,80}", thread_id):
+        raise HTTPException(422, "不合法的会话 ID")
     target_dir = updated_dir / f"session_{thread_id}"
     target_dir.mkdir(parents=True, exist_ok=True)
 
     saved_files = []
 
     for file in files:
+        if not file.filename or Path(file.filename).name != file.filename or file.filename in {".", ".."}:
+            raise HTTPException(422, "不合法的文件名")
         file_path = target_dir / file.filename
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)

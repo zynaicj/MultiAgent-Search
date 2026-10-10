@@ -1,0 +1,19 @@
+name: Chat Integration Checks
+on:
+  push:
+    branches:
+      - feature/deepagents-chat-integrated
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax check
+        run: python -m compileall -q agent api tools tests
+      - name: Chat store unit tests
+        run: python -m unittest discover -s tests -p 'test_chat_store.py' -v

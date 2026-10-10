@@ -204,14 +204,22 @@ async def rename_conversation(cid: str, body: RenameChatRequest):
 @app.delete("/api/conversations/{cid}")
 async def delete_conversation(cid: str):
     # Refuse to delete while the Agent is working or waiting for approval.
-    result = store.delete_conversation(cid)
-    if result == "missing":
+    conversation = store.get_conversation(cid)
+    if not conversation:
         raise HTTPException(404, "会话不存在")
-    if result == "busy":
+    if conversation["status"] in {"running", "waiting_approval"}:
         raise HTTPException(409, "请先完成当前任务或审批")
+    # Clear LangGraph memory before removing chat metadata; avoid a ghost
+    # checkpoint being accidentally reused for a newly created conversation.
     from agent.main_agent import checkpointer
     if checkpointer is not None and hasattr(checkpointer, "adelete_thread"):
-        await checkpointer.adelete_thread(cid)
+        try:
+            await checkpointer.adelete_thread(cid)
+        except Exception as exc:
+            raise HTTPException(500, f"删除 Checkpoint 失败：{exc}")
+    result = store.delete_conversation(cid)
+    if result == "busy":
+        raise HTTPException(409, "当前会话正在执行")
     shutil.rmtree(output_dir / f"session_{cid}", ignore_errors=True)
     shutil.rmtree(updated_dir / f"session_{cid}", ignore_errors=True)
     return {"status": "deleted"}

@@ -50,7 +50,7 @@ a{color:#b5b5ff}.statusTag{padding:3px 7px;border:1px solid var(--line);border-r
 </div>
 </main>
 <aside class="right">
-<h2>Agent 执行日志</h2><div id="logs"></div>
+<h2>任务计划 / TodoList</h2><div id="todos" class="muted">暂无任务规划</div><h2 style="margin-top:22px">Agent 执行日志</h2><div id="logs"></div>
 <h2 style="margin-top:22px">生成文件</h2><button onclick="loadFiles()">刷新</button><div id="files"></div>
 </aside>
 </div>
@@ -76,6 +76,11 @@ function appendEvent(ev){
  if(ev.event_id&&seenEvents.has(ev.event_id))return;
  if(ev.event_id)seenEvents.add(ev.event_id);
  const el=document.createElement('div');el.className='event';el.textContent='['+ev.event+'] '+ev.message;$('#logs').appendChild(el);$('#logs').scrollTop=$('#logs').scrollHeight;
+ if(ev.event==='todo_update'){
+   const todos=ev.data?.todos||[];
+   $('#todos').innerHTML=todos.map(t=>'<div class="event">'+escapeHtml((t.status||'pending')+' · '+(t.content||t.task||''))+'</div>').join('')||'暂无任务规划';
+ }
+ if(ev.event==='error')notify('执行失败：'+ev.message);
  if(ev.event==='task_result'||ev.event==='error'||ev.event==='run_status'){refreshCurrent().catch(console.error);}
  if(ev.event==='session_created'||ev.event==='task_result'){loadFiles().catch(console.error);}
 }
@@ -121,7 +126,7 @@ async function connect(id){
 }
 async function switchChat(id){
  clearTimeout(retryTimer);retryTimer=null;
- active=id;seenEvents.clear();$('#logs').innerHTML='';$('#files').innerHTML='';notify('');
+ active=id;seenEvents.clear();$('#logs').innerHTML='';$('#todos').textContent='暂无任务规划';$('#files').innerHTML='';notify('');
  conversation=await request('/api/conversations/'+urlId(id));
  updateHeader();await loadMessages(id);await refreshChats();
  try{await connect(id);await loadEvents(id)}catch(e){notify('WebSocket 未连接：'+e.message)}

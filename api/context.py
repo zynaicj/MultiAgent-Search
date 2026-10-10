@@ -78,3 +78,21 @@ def reset_session_context(session_token, thread_token=None):
     _session_dir_ctx.reset(session_token)
     if thread_token:
         _thread_id_ctx.reset(thread_token)
+# Run-level context for durable event attribution.
+_run_id_ctx: ContextVar[Optional[str]] = ContextVar("run_id", default=None)
+
+
+def set_run_context(run_id: str):
+    return _run_id_ctx.set(run_id)
+
+
+def get_run_context() -> Optional[str]:
+    return _run_id_ctx.get()
+
+
+def reset_run_context(token):
+    _run_id_ctx.reset(token)
+
+
+def reset_thread_context(token):
+    _thread_id_ctx.reset(token)

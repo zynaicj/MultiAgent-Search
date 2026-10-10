@@ -154,9 +154,17 @@ def _handle_agent_chunk(chunk):
 
         if tool_calls:
             for tool_call in tool_calls:
-                if tool_call.get("name") == "task":
-                    args = tool_call.get("args", {})
-                    monitor.report_assistant(args.get("subagent_type", "未知子智能体"), {"description": args.get("description", "")})
+                name = tool_call.get("name", "")
+                args = tool_call.get("args", {})
+                if name == "task":
+                    monitor.report_assistant(
+                        args.get("subagent_type", "未知子智能体"),
+                        {"description": args.get("description", "")},
+                    )
+                elif name == "write_todos":
+                    monitor._emit("todo_update", "DeepAgents 已更新待办任务", {"todos": args.get("todos", [])})
+                else:
+                    monitor.report_tool(name, args)
         elif getattr(last_msg, "content", None):
             final_content = last_msg.content
 
@@ -250,7 +258,7 @@ async def run_deep_agent(task_query, session_id, report_result=True):
     final_content = None
 
     try:
-        async for chunk in agent.astream({"messages": [{"role": "user", "content": model_query}]}, config=config):
+        async for chunk in agent.astream({"messages": [{"role": "user", "content": model_query}]}, config=config, stream_mode="updates"):
             chunk_final_content = _handle_agent_chunk(chunk)
 
             if chunk_final_content:
@@ -293,7 +301,7 @@ async def run_deep_agent(task_query, session_id, report_result=True):
     只需要简短确认文档已经生成。
     """
 
-            async for chunk in agent.astream({"messages": [{"role": "user", "content": repair_prompt}]}, config=config):
+            async for chunk in agent.astream({"messages": [{"role": "user", "content": repair_prompt}]}, config=config, stream_mode="updates"):
                 chunk_final_content = _handle_agent_chunk(chunk)
 
                 if chunk_final_content and final_content is None:
@@ -353,7 +361,7 @@ async def resume_deep_agent(session_id: str, decision: str, report_result=True):
         config = {"configurable": {"thread_id": session_id}}
         final_content = None
 
-        async for chunk in agent.astream(Command(resume={"decision": decision}), config=config):
+        async for chunk in agent.astream(Command(resume={"decision": decision}), config=config, stream_mode="updates"):
             chunk_final_content = _handle_agent_chunk(chunk)
 
             if chunk_final_content:

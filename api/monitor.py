@@ -3,7 +3,7 @@ import datetime
 import asyncio
 from typing import Any, Dict, Optional
 from fastapi import WebSocket
-from api.context import get_thread_context
+from api.context import get_thread_context, get_run_context
 
 # 修复 Windows GBK 编码问题
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -53,6 +53,20 @@ class ToolMonitor:
             "data": data or {},
             "timestamp": datetime.datetime.now().isoformat()
         }
+
+        # Chat event journal: persist before notifying WebSocket clients.
+        run_id = get_run_context()
+        thread_id = get_thread_context()
+        if run_id and thread_id:
+            payload["run_id"] = run_id
+            payload["conversation_id"] = thread_id
+            try:
+                from api.chat import store
+                payload["event_id"] = store.append_event(
+                    thread_id, run_id, event_type, message, data or {}
+                )
+            except Exception as exc:
+                print(f"[Monitor] Event persistence failed: {exc}")
 
         # 1. 优先尝试通过 FastAPI WebSocket 发送 (定向推送)
         if self.websocket_manager:
@@ -128,42 +142,37 @@ monitor = ToolMonitor()
 
 
 class ConnectionManager:
+    """Multiple tabs may observe the same conversation."""
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-        # 延迟绑定 loop，防止初始化时 loop 不一致
+        self.active_connections: Dict[str, set[WebSocket]] = {}
         self.loop = None
 
     def set_loop(self, loop):
-        """显式设置事件循环"""
         self.loop = loop
         monitor.set_websocket_manager(self)
-        print(f"[Monitor] ConnectionManager manually bound to loop: {id(self.loop)}")
 
     async def connect(self, websocket: WebSocket, thread_id: str):
         await websocket.accept()
-        print(f"存储当前会话id:{thread_id}对应的:{websocket}")
-        self.active_connections[thread_id] = websocket
-        print(f"Client connected: {thread_id}")
-        # 告诉前端：
-        # 当前 thread_id 对应的 WebSocket 已经在服务端注册完成
-        await websocket.send_json({
-            "type": "ws_ready",
-            "thread_id": thread_id
-        })
+        self.active_connections.setdefault(thread_id, set()).add(websocket)
+        await websocket.send_json({"type": "ws_ready", "thread_id": thread_id})
 
     def disconnect(self, websocket: WebSocket, thread_id: str):
-        if thread_id in self.active_connections:
-            del self.active_connections[thread_id]
-        print(f"Client disconnected: {thread_id}")
-        
+        sockets = self.active_connections.get(thread_id)
+        if sockets is None:
+            return
+        sockets.discard(websocket)
+        if not sockets:
+            self.active_connections.pop(thread_id, None)
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
 
     async def send_to_thread(self, message: dict, thread_id: str):
-        if thread_id in self.active_connections:
-            websocket = self.active_connections[thread_id]
-            await websocket.send_json(message)
+        for websocket in list(self.active_connections.get(thread_id, ())):
+            try:
+                await websocket.send_json(message)
+            except Exception:
+                self.disconnect(websocket, thread_id)
 
 
 manager = ConnectionManager()

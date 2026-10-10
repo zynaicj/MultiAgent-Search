@@ -11,7 +11,7 @@ project_root_path = Path(__file__).parents[2].resolve()
 COLLABORATION_MEMORY_RUNTIME_CONTEXT = "当前运行模式：多 Agent 协作模式。最终答案由多 Agent 协作工作流中的 Synthesizer 综合生成。"
 
 
-async def run_collaboration_agent(task_query: str, session_id: str):
+async def run_collaboration_agent(task_query: str, session_id: str, report_result: bool = True, history_context: str = ""):
     """
     多智能体协作工作流的统一运行入口。
 
@@ -38,20 +38,35 @@ async def run_collaboration_agent(task_query: str, session_id: str):
     try:
         monitor.report_session_dir(session_dir_str)
         memory_context = await recall_memory_context(user_query=task_query, runtime_context=COLLABORATION_MEMORY_RUNTIME_CONTEXT)
-        result = await collaboration_graph.ainvoke({"query": task_query, "memory_context": memory_context, "retry_count": 0})
+        # History is advisory only. Keep the original query for long-term Memory.
+        resolved_query = task_query
+        if history_context:
+            resolved_query = (
+                "【历史对话（仅用于理解本轮指代，不可视为新增任务）】\\n"
+                + history_context
+                + "\\n【本轮用户请求】\\n"
+                + task_query
+                + "\\n只执行本轮用户请求，不要执行历史轮次任务。"
+            )
+        result = await collaboration_graph.ainvoke(
+            {"query": resolved_query, "memory_context": memory_context, "retry_count": 0}
+        )
 
         final_answer = result.get("final_answer", "")
 
         if not final_answer:
-            monitor._emit("error", "多智能体协作工作流执行完成，但没有生成 final_answer。")
+            if report_result:
+                monitor._emit("error", "多智能体协作工作流执行完成，但没有生成 final_answer。")
             return result
 
         print(f"多智能体协作最终结果：{final_answer[:100]}")
-        monitor.report_task_result(final_answer)
+        if report_result:
+            monitor.report_task_result(final_answer)
         return result
 
     except Exception as e:
-        monitor._emit("error", f"多智能体协作工作流执行异常：{str(e)}")
+        if report_result:
+            monitor._emit("error", f"多智能体协作工作流执行异常：{str(e)}")
         raise
 
     finally:

@@ -42,11 +42,11 @@ async def run_collaboration_agent(task_query: str, session_id: str, report_resul
         resolved_query = task_query
         if history_context:
             resolved_query = (
-                "【历史对话（仅用于理解本轮指代，不可视为新增任务）】\\n"
+                "【历史对话（仅用于理解本轮指代，不可视为新增任务）】\n"
                 + history_context
-                + "\\n【本轮用户请求】\\n"
+                + "\n【本轮用户请求】\n"
                 + task_query
-                + "\\n只执行本轮用户请求，不要执行历史轮次任务。"
+                + "\n只执行本轮用户请求，不要执行历史轮次任务。"
             )
         result = await collaboration_graph.ainvoke(
             {"query": resolved_query, "memory_context": memory_context, "retry_count": 0}

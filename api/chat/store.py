@@ -1,5 +1,6 @@
 """SQLite chat history and execution journal, independent of LangGraph checkpoints."""
 import json
+from contextlib import contextmanager
 import sqlite3
 import threading
 import uuid
@@ -17,12 +18,17 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+@contextmanager
 def _db():
     con = sqlite3.connect(str(DB_PATH), timeout=30)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA busy_timeout=30000")
-    con.execute("PRAGMA foreign_keys=ON")
-    return con
+    try:
+        con.row_factory = sqlite3.Row
+        con.execute("PRAGMA busy_timeout=30000")
+        con.execute("PRAGMA foreign_keys=ON")
+        with con:
+            yield con
+    finally:
+        con.close()
 
 
 def init():

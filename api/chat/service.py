@@ -21,7 +21,7 @@ async def run_turn(cid: str, rid: str, query: str):
             raise RuntimeError("会话已不存在")
         if conversation["mode"] == "collaboration":
             previous = [m for m in store.list_messages(cid) if m.get("run_id") != rid][-6:]
-            history_context = "\\n".join(
+            history_context = "\n".join(
                 ("用户" if m["role"] == "user" else "Agent") + "：" + m["content"][:800]
                 for m in previous
             )

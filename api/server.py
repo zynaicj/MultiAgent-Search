@@ -27,6 +27,8 @@ sys.path.insert(0, str(project_root))
 # 注意：agent.main_agent 导入时会初始化 main_agent，这可能需要几秒钟
 from agent.main_agent import run_deep_agent
 from api.monitor import manager
+from api import conversations as store
+from fastapi import HTTPException
 
 app = FastAPI(title="DeepAgents API")
 
@@ -78,18 +80,74 @@ async def startup_event():
     print(f"[Server] WebSocket Manager bound to loop: {id(loop)}")
 
 
+running = set()
+
+@app.get("/api/conversations")
+async def conversations():
+    return {"conversations": store.all_conversations()}
+
+@app.post("/api/conversations")
+async def create_conversation():
+    return store.create_conversation()
+
+@app.get("/api/conversations/{cid}/messages")
+async def conversation_messages(cid: str):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    return {"messages": store.get_messages(cid)}
+
+class RenameRequest(BaseModel):
+    title: str
+
+@app.patch("/api/conversations/{cid}")
+async def rename_conversation(cid: str, body: RenameRequest):
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    if not body.title.strip():
+        raise HTTPException(422, "标题不能为空")
+    store.rename_conversation(cid, body.title.strip())
+    return store.get_conversation(cid)
+
+@app.delete("/api/conversations/{cid}")
+async def delete_conversation(cid: str):
+    if cid in running:
+        raise HTTPException(409, "会话正在执行")
+    if not store.get_conversation(cid):
+        raise HTTPException(404, "会话不存在")
+    from agent.main_agent import checkpointer
+    await asyncio.to_thread(checkpointer.delete_thread, cid)
+    store.delete_conversation(cid)
+    return {"status": "deleted"}
+
+async def _run_turn(query, cid):
+    store.set_status(cid, "running")
+    try:
+        answer = await run_deep_agent(query, cid)
+        if answer is not None:
+            store.add_message(cid, "assistant", answer)
+            store.set_status(cid, "idle")
+        else:
+            store.set_status(cid, "error")
+    except Exception as exc:
+        store.set_status(cid, "error")
+        print(f"[Chat] {exc}")
+    finally:
+        running.discard(cid)
+
 @app.post("/api/task")
 async def run_task(request: TaskRequest):
-    # 1. [ID 初始化]
-    thread_id = request.thread_id or str(uuid.uuid4())
-
-    # 2. [后台执行] 异步运行 Agent，不阻塞主线程
-    # 注意：这里简单的使用 asyncio.create_task 触发，由 main_agent 内部负责实时推送
-    asyncio.create_task(run_deep_agent(request.query, thread_id))
-
-    # 3. [立即响应]
-    return {"status": "started", "thread_id": thread_id}
-
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(422, "问题不能为空")
+    cid = request.thread_id or str(uuid.uuid4())
+    if cid in running:
+        raise HTTPException(409, "请等待当前回答完成")
+    if not store.get_conversation(cid):
+        store.create_conversation(cid, query[:40])
+    running.add(cid)
+    store.add_message(cid, "user", query)
+    asyncio.create_task(_run_turn(query, cid))
+    return {"status": "started", "thread_id": cid}
 
 @app.post("/api/upload")
 async def upload_files(files: List[UploadFile] = File(...), thread_id: str = Form(...)):

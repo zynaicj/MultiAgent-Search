@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/deepagents-native-memory
+      - feature/hybrid-memory-policy
   workflow_dispatch:
 
 jobs:
@@ -15,7 +16,7 @@ jobs:
           python-version: "3.11"
       - name: Install verified pinned memory libraries
         run: |
-          pip install "deepagents==0.4.3" "langgraph-checkpoint-sqlite==3.1.1"
+          pip install "deepagents==0.4.3" "langgraph-checkpoint-sqlite==3.1.1" "pymongo==4.18.1" "python-dotenv==1.2.1"
       - name: Syntax compilation
         run: python -m compileall -q agent api tools tests
       - name: Native memory tests
@@ -24,5 +25,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_native_memory_agent.py' -v
       - name: Memory CRUD and same-thread refresh regression tests
         run: python -m unittest discover -s tests -p 'test_native_memory_management.py' -v
+      - name: Hybrid memory policy and Mongo owner-scope tests
+        run: python -m unittest discover -s tests -p 'test_hybrid_memory.py' -v
       - name: Existing chat store regression tests
         run: python -m unittest discover -s tests -p 'test_chat_store.py' -v

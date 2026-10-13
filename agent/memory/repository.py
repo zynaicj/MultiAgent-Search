@@ -4,6 +4,7 @@ from bson import ObjectId
 from dotenv import load_dotenv
 from pymongo import AsyncMongoClient
 from agent.memory.schemas import MemoryRecord, MemoryType
+from agent.memory.native import DEFAULT_USER_ID, memory_namespace
 
 
 load_dotenv()
@@ -41,18 +42,19 @@ class MemoryRepository:
         await self.client.admin.command("ping")
         return True
 
-    async def save_memory(self, memory: MemoryRecord) -> str:
+    async def save_memory(self, memory: MemoryRecord, user_id: str = DEFAULT_USER_ID) -> str:
         """
         保存一条长期记忆。
 
         返回 MongoDB 生成的 _id。
         """
 
-        document = memory.model_dump()
+        memory_namespace(user_id)  # Validate the trusted local user identifier.
+        document = {**memory.model_dump(), "owner_id": user_id}
         result = await self.collection.insert_one(document)
         return str(result.inserted_id)
 
-    async def get_memories_by_type(self, memory_type: MemoryType, limit: int = 50) -> list[dict]:
+    async def get_memories_by_type(self, memory_type: MemoryType, limit: int = 50, user_id: str = DEFAULT_USER_ID) -> list[dict]:
         """
         查询指定类型的长期记忆。
 
@@ -63,7 +65,8 @@ class MemoryRepository:
         会改成只召回语义相关的记忆。
         """
 
-        cursor = self.collection.find({"memory_type": memory_type}).sort("created_at", -1)
+        memory_namespace(user_id)
+        cursor = self.collection.find({"owner_id": user_id, "memory_type": memory_type}).sort("created_at", -1)
         memories = await cursor.to_list(length=limit)
 
         for memory in memories:
@@ -71,15 +74,16 @@ class MemoryRepository:
 
         return memories
 
-    async def update_memory(self, memory_id: str, content: str) -> bool:
+    async def update_memory(self, memory_id: str, content: str, user_id: str = DEFAULT_USER_ID) -> bool:
         """
         更新指定长期记忆的内容。
         """
 
-        result = await self.collection.update_one({"_id": ObjectId(memory_id)}, {"$set": {"content": content, "updated_at": datetime.now(timezone.utc)}})
+        memory_namespace(user_id)
+        result = await self.collection.update_one({"_id": ObjectId(memory_id), "owner_id": user_id}, {"$set": {"content": content, "updated_at": datetime.now(timezone.utc)}})
         return result.matched_count > 0
 
-    async def get_all_memories(self) -> list[dict]:
+    async def get_all_memories(self, user_id: str = DEFAULT_USER_ID) -> list[dict]:
         """
         查询当前所有长期记忆。
 
@@ -88,7 +92,10 @@ class MemoryRepository:
         这里会升级成按相关度召回。
         """
 
-        cursor = self.collection.find({}).sort("created_at", -1)
+        memory_namespace(user_id)
+        # Deliberately do NOT read legacy records with no owner_id.
+        # They need explicit backup/review/migration before use.
+        cursor = self.collection.find({"owner_id": user_id}).sort("created_at", -1)
         memories = await cursor.to_list(length=100)
 
         for memory in memories:

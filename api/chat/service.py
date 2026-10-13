@@ -1,6 +1,7 @@
 """Turn lifecycle for both modes. DeepAgents execution remains in agent/main_agent.py."""
 import asyncio
 import json
+import os
 
 from agent.governance import approval_registry
 from agent.governance.models import PendingApproval
@@ -48,7 +49,7 @@ async def run_turn(cid: str, rid: str, query: str):
         answer = result.get("final_content") or "任务已完成，但未返回文本结果。"
         store.finish_run(rid, "completed", answer=answer)
         monitor.report_task_result(answer)
-        if conversation["mode"] == "deep_agent":
+        if conversation["mode"] == "deep_agent" and os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
             await remember_user_input(query)
     except Exception as exc:
         store.finish_run(rid, "failed", error=str(exc))
@@ -73,7 +74,7 @@ async def resume_turn(cid: str, rid: str, decision: str):
             store.finish_run(rid, "completed", answer=answer)
             monitor.report_task_result(answer)
             original = store.get_run(rid)
-            if original:
+            if original and os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
                 await remember_user_input(original["query"])
         else:
             error = result.get("error", "审批恢复失败")

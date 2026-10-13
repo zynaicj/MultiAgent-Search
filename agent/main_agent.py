@@ -268,16 +268,19 @@ async def run_deep_agent(task_query, session_id, report_result=True):
 
     规则：
 
-    1. 新生成文件必须保存到工作目录：
+    1. 用户需要下载的报告/导出文件必须保存到工作目录：
        '{relative_session_dir_str}/filename'
+       但原生长期记忆文件 '/memories/AGENTS.md' 是虚拟 Backend 路径，
+       可以使用这个特定的虚拟绝对路径通过 read_file/edit_file 更新记忆。
+       请勿将它写进 output 文件目录。
 
     2. 读取已上传文件时，
        直接将文件名作为
        read_file_content 的 filename 参数，
        不要带目录前缀。
 
-    3. 使用相对路径，
-       禁止使用绝对路径。
+    3. 真实报告文件使用相对路径；不要访问其他绝对磁盘路径。
+       唯一允许的虚拟绝对路径是 /memories/AGENTS.md。
 
     4. 若存在上传文件，
        请先分析内容。

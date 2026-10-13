@@ -5,6 +5,7 @@ Uses a local fake LLM: no Qwen API, MongoDB, or web calls are needed.
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from deepagents import create_deep_agent
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -16,6 +17,12 @@ from langgraph.store.sqlite.aio import AsyncSqliteStore
 from agent.memory.manage import delete_preference, list_preferences, set_preference
 from agent.memory.native import MEMORY_SOURCE_PATH, backend_factory_for, read_native_memory, seed_native_memory
 from agent.memory.refresh import RefreshNativeMemoryMiddleware
+from agent.memory import native as native_module
+from agent.memory.tools import (
+    save_long_term_preference,
+    list_long_term_preferences,
+    forget_long_term_preference,
+)
 
 MARKER = "偏好标记ABC_8721"
 
@@ -59,6 +66,32 @@ class NativeMemoryManagementTest(unittest.IsolatedAsyncioTestCase):
                     await set_preference(store, "api_key", "should-not-store", "alice")
                 with self.assertRaises(ValueError):
                     await set_preference(store, "abc", "line1" + chr(10) + "line2", "alice")
+
+    async def test_registered_preference_tools_verify_the_persisted_data(self):
+        """Tool messages are grounded in read-back of the actual SQLite record."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "tool_memory.sqlite"
+            with patch.object(native_module, "NATIVE_STORE_PATH", db):
+                try:
+                    result = await save_long_term_preference.ainvoke({
+                        "key": "reply_style", "value": "详细中文注释"
+                    })
+                    self.assertIn("持久化校验成功", result)
+                    self.assertIn("added", result)
+                    saved = await list_long_term_preferences.ainvoke({})
+                    self.assertIn("reply_style: 详细中文注释", saved)
+                    result = await save_long_term_preference.ainvoke({
+                        "key": "reply_style", "value": "详细中文注释"
+                    })
+                    self.assertIn("unchanged", result)
+                    deleted = await forget_long_term_preference.ainvoke({
+                        "key": "reply_style"
+                    })
+                    self.assertIn("已从持久化存储删除", deleted)
+                    saved = await list_long_term_preferences.ainvoke({})
+                    self.assertIn("没有通过偏好管理工具保存", saved)
+                finally:
+                    await native_module.close_native_store()
 
     async def test_actual_deepagent_refreshes_same_thread_after_memory_changes(self):
         with tempfile.TemporaryDirectory() as tmp:

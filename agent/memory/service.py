@@ -2,9 +2,10 @@ from agent.memory.extractor import extract_memories
 from agent.memory.manager import decide_memory_action
 from agent.memory.repository import memory_repository
 from agent.memory.schemas import MemoryProcessResult, MemoryRecord
+from agent.memory.native import DEFAULT_USER_ID
 
 
-async def extract_and_manage_memories(user_input: str) -> list[MemoryProcessResult]:
+async def extract_and_manage_memories(user_input: str, user_id: str = DEFAULT_USER_ID, allowed_types: frozenset[str] | None = None) -> list[MemoryProcessResult]:
     """
     从用户输入中提取长期记忆，
     并根据已有记忆执行新增、跳过或更新。
@@ -17,6 +18,8 @@ async def extract_and_manage_memories(user_input: str) -> list[MemoryProcessResu
     """
 
     memories = await extract_memories(user_input)
+    if allowed_types is not None:
+        memories = [m for m in memories if m.memory_type in allowed_types]
 
     if not memories:
         return []
@@ -24,12 +27,12 @@ async def extract_and_manage_memories(user_input: str) -> list[MemoryProcessResu
     results = []
 
     for memory in memories:
-        existing_memories = await memory_repository.get_memories_by_type(memory.memory_type)
+        existing_memories = await memory_repository.get_memories_by_type(memory.memory_type, user_id=user_id)
         decision = await decide_memory_action(memory, existing_memories)
 
         if decision.action == "add":
             final_memory = MemoryRecord(memory_type=memory.memory_type, content=decision.final_content)
-            memory_id = await memory_repository.save_memory(final_memory)
+            memory_id = await memory_repository.save_memory(final_memory, user_id=user_id)
             results.append(MemoryProcessResult(action="add", memory_id=memory_id, memory_type=memory.memory_type, content=decision.final_content, reason=decision.reason))
             continue
 
@@ -45,7 +48,7 @@ async def extract_and_manage_memories(user_input: str) -> list[MemoryProcessResu
         if decision.target_memory_id not in existing_ids:
             raise ValueError("Memory Manager 返回了不存在的 target_memory_id")
 
-        updated = await memory_repository.update_memory(decision.target_memory_id, decision.final_content)
+        updated = await memory_repository.update_memory(decision.target_memory_id, decision.final_content, user_id=user_id)
 
         if not updated:
             raise ValueError("MongoDB 长期记忆更新失败")

@@ -1,13 +1,13 @@
 """Turn lifecycle for both modes. DeepAgents execution remains in agent/main_agent.py."""
 import asyncio
 import json
-import os
 
 from agent.governance import approval_registry
 from agent.governance.models import PendingApproval
 from agent.main_agent import run_deep_agent, resume_deep_agent
 from agent.collaboration.runner import run_collaboration_agent
 from agent.memory.runtime import remember_user_input
+from agent.memory.policy import deepagent_hybrid_enabled, MONGO_FACT_TYPES
 from api.chat import store
 from api.context import set_run_context, reset_run_context, set_thread_context, reset_thread_context
 from api.monitor import monitor
@@ -49,8 +49,8 @@ async def run_turn(cid: str, rid: str, query: str):
         answer = result.get("final_content") or "任务已完成，但未返回文本结果。"
         store.finish_run(rid, "completed", answer=answer)
         monitor.report_task_result(answer)
-        if conversation["mode"] == "deep_agent" and os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
-            await remember_user_input(query)
+        if conversation["mode"] == "deep_agent" and deepagent_hybrid_enabled():
+            await remember_user_input(query, allowed_types=MONGO_FACT_TYPES)
     except Exception as exc:
         store.finish_run(rid, "failed", error=str(exc))
         monitor._emit("error", f"执行失败：{exc}", {"run_id": rid})
@@ -74,8 +74,8 @@ async def resume_turn(cid: str, rid: str, decision: str):
             store.finish_run(rid, "completed", answer=answer)
             monitor.report_task_result(answer)
             original = store.get_run(rid)
-            if original and os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
-                await remember_user_input(original["query"])
+            if original and deepagent_hybrid_enabled():
+                await remember_user_input(original["query"], allowed_types=MONGO_FACT_TYPES)
         else:
             error = result.get("error", "审批恢复失败")
             store.finish_run(rid, "waiting_approval", approval=store.get_run(rid) and json.loads(store.get_run(rid).get("approval_json") or "null"))

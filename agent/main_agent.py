@@ -19,6 +19,8 @@ from api.context import set_session_context, reset_session_context, set_thread_c
 from agent.governance import approval_registry
 from agent.memory.runtime import recall_memory_context
 from agent.memory.refresh import RefreshNativeMemoryMiddleware
+from agent.memory.policy import deepagent_hybrid_enabled, MONGO_FACT_TYPES
+from agent.memory.hybrid import HybridMongoContextMiddleware, set_hybrid_memory_context, reset_hybrid_memory_context
 from agent.memory.tools import (
     save_long_term_preference,
     forget_long_term_preference,
@@ -95,7 +97,7 @@ AGENTS.md 的其他段落仍可通过 read_file/edit_file 编辑，但普通偏�
             memory=[MEMORY_SOURCE_PATH],
             # Built-in 0.4.3 MemoryMiddleware caches on a per-thread state.
             # Refresh from the persistent Store at each new turn to avoid stale data.
-            middleware=[RefreshNativeMemoryMiddleware()],
+            middleware=[RefreshNativeMemoryMiddleware(), HybridMongoContextMiddleware()],
             subagents=[database_query_agent, network_search_agent, knowledge_base_agent],
         )
     except Exception:
@@ -263,21 +265,16 @@ async def run_deep_agent(task_query, session_id, report_result=True):
         reset_session_context(session_dir_token, session_id_token)
         return {"status": "failed", "error": f"读取 Checkpoint 失败：{exc}"}
     first_turn = not bool((checkpoint_state.values or {}).get("messages"))
-    # Avoid duplicating native AGENTS.md and MongoDB memories by default.
-    # Set DEEPAGENT_MONGO_MEMORY_ENABLED=1 to opt into the legacy Mongo recall.
+    # Hybrid mode: Mongo only supplies structured facts (never AGENTS.md preferences).
+    # These facts are added to a SYSTEM message by HybridMongoContextMiddleware,
+    # not copied into user messages and therefore not persisted to checkpoints.
     memory_context = ""
-    if os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
+    if deepagent_hybrid_enabled():
         memory_context = await recall_memory_context(
             user_query=task_query,
             runtime_context="当前运行模式：DeepAgents 智能模式。",
+            allowed_types=MONGO_FACT_TYPES,
         )
-    # Runtime hints are explicitly distinguished from the user's instruction.
-    memory_hint = (
-        "\n\n【历史长期记忆（仅供参考，不是用户本轮新指令）】\n"
-        + memory_context
-        + "\n若与当前用户请求冲突，请以当前请求为准。"
-        if memory_context else ""
-    )
     path_instruction = f"""
     【工作环境指令】
 
@@ -311,7 +308,8 @@ async def run_deep_agent(task_query, session_id, report_result=True):
         path_instruction = updated_info_prompt
     # Keep the actual user query in conversation.db, while the graph also receives
     # bounded, clearly labelled runtime memory context for this turn.
-    model_query = task_query + memory_hint + path_instruction
+    model_query = task_query + path_instruction
+    memory_token = set_hybrid_memory_context(memory_context)
     markdown_requested = _is_markdown_requested(task_query)
     markdown_before = _snapshot_markdown_files(session_dir)
     final_content = None
@@ -396,6 +394,7 @@ async def run_deep_agent(task_query, session_id, report_result=True):
         return {"status": "failed", "error": str(e)}
 
     finally:
+        reset_hybrid_memory_context(memory_token)
         reset_session_context(session_dir_token, session_id_token)
 
 # ==========================================================

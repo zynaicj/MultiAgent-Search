@@ -18,6 +18,12 @@ from api.monitor import monitor
 from api.context import set_session_context, reset_session_context, set_thread_context
 from agent.governance import approval_registry
 from agent.memory.runtime import recall_memory_context
+from agent.memory.refresh import RefreshNativeMemoryMiddleware
+from agent.memory.tools import (
+    save_long_term_preference,
+    forget_long_term_preference,
+    list_long_term_preferences,
+)
 from agent.memory.native import (
     MEMORY_SOURCE_PATH,
     backend_factory_for,
@@ -64,18 +70,32 @@ async def init_main_agent():
 【跨会话长期记忆规则】
 你有一份跨聊天会话共享的长期记忆文件 /memories/AGENTS.md。
 它由 DeepAgents MemoryMiddleware 在聊天开始时读取。
-如果用户明确要求“记住”“以后都这样”等稳定、非敏感偏好，
-可使用 read_file 与 edit_file 更新该文件；更新已有偏好时替换旧条目，
-不要无条件追加重复事实。不要将临时问题、密钥、密码、凭据或个人敏感
-信息写入记忆。没有明确长期保存意图时不要为了展示功能而写入记忆。
+当用户明确要求“记住”“以后都这样”等长期、非敏感偏好时，优先调用
+save_long_term_preference(key, value)。这个工具按稳定 key 去重或更新，并在
+保存后从 SQLite 中读取校验。key 必须为稳定英文 snake_case 标识，
+例如 python_explanation_style；同一偏好更新时沿用原 key。
+用户要求忘记一项偏好时，调用 forget_long_term_preference(key)；
+要求查看已保存的偏好时，调用 list_long_term_preferences()。
+只有工具返回持久化校验成功时才向用户确认保存。
+不要存储临时任务内容、密码、令牌、密钥或个人敏感信息；
+用户没有要求长期保存时不要擅自记忆。
+AGENTS.md 的其他段落仍可通过 read_file/edit_file 编辑，但普通偏好
+一律优先使用上述专用工具。
 /memories/AGENTS.md 是虚拟 Backend 路径，不是本地 output 文件；
 真实报告 Markdown/PDF 仍应使用现有 generate_markdown 等工具。
 """,
-            tools=[generate_markdown, convert_md_to_pdf, read_file_content],
+            tools=[
+                generate_markdown, convert_md_to_pdf, read_file_content,
+                save_long_term_preference, forget_long_term_preference,
+                list_long_term_preferences,
+            ],
             checkpointer=checkpointer,
             store=memory_store,
             backend=backend_factory_for(),
             memory=[MEMORY_SOURCE_PATH],
+            # Built-in 0.4.3 MemoryMiddleware caches on a per-thread state.
+            # Refresh from the persistent Store at each new turn to avoid stale data.
+            middleware=[RefreshNativeMemoryMiddleware()],
             subagents=[database_query_agent, network_search_agent, knowledge_base_agent],
         )
     except Exception:

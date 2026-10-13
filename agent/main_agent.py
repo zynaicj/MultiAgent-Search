@@ -1,4 +1,5 @@
 import shutil
+import os
 from pathlib import Path
 
 from deepagents import create_deep_agent
@@ -17,6 +18,12 @@ from api.monitor import monitor
 from api.context import set_session_context, reset_session_context, set_thread_context
 from agent.governance import approval_registry
 from agent.memory.runtime import recall_memory_context
+from agent.memory.native import (
+    MEMORY_SOURCE_PATH,
+    backend_factory_for,
+    init_native_store,
+    close_native_store,
+)
 
 # ==========================================================
 # Checkpointer
@@ -44,15 +51,39 @@ async def init_main_agent():
     if main_agent is not None:
         return main_agent
 
+    # Native long-term memory uses a distinct persistent SQLite Store.
+    # It does NOT replace the short-term AsyncSqliteSaver Checkpointer.
     _checkpointer_context = AsyncSqliteSaver.from_conn_string(str(checkpoint_db_path))
     checkpointer = await _checkpointer_context.__aenter__()
-    main_agent = create_deep_agent(
-        model=model,
-        system_prompt=main_agent_content["system_prompt"],
-        tools=[generate_markdown, convert_md_to_pdf, read_file_content],
-        checkpointer=checkpointer,
-        subagents=[database_query_agent, network_search_agent, knowledge_base_agent],
-    )
+    try:
+        memory_store = await init_native_store()
+        main_agent = create_deep_agent(
+            model=model,
+            system_prompt=main_agent_content["system_prompt"] + """
+
+【跨会话长期记忆规则】
+你有一份跨聊天会话共享的长期记忆文件 /memories/AGENTS.md。
+它由 DeepAgents MemoryMiddleware 在聊天开始时读取。
+如果用户明确要求“记住”“以后都这样”等稳定、非敏感偏好，
+可使用 read_file 与 edit_file 更新该文件；更新已有偏好时替换旧条目，
+不要无条件追加重复事实。不要将临时问题、密钥、密码、凭据或个人敏感
+信息写入记忆。没有明确长期保存意图时不要为了展示功能而写入记忆。
+/memories/AGENTS.md 是虚拟 Backend 路径，不是本地 output 文件；
+真实报告 Markdown/PDF 仍应使用现有 generate_markdown 等工具。
+""",
+            tools=[generate_markdown, convert_md_to_pdf, read_file_content],
+            checkpointer=checkpointer,
+            store=memory_store,
+            backend=backend_factory_for(),
+            memory=[MEMORY_SOURCE_PATH],
+            subagents=[database_query_agent, network_search_agent, knowledge_base_agent],
+        )
+    except Exception:
+        await close_native_store()
+        await _checkpointer_context.__aexit__(None, None, None)
+        _checkpointer_context = None
+        checkpointer = None
+        raise
     return main_agent
 
 # ==========================================================
@@ -69,6 +100,7 @@ async def close_main_agent():
 
     if _checkpointer_context is not None:
         await _checkpointer_context.__aexit__(None, None, None)
+    await close_native_store()
 
     _checkpointer_context = None
     checkpointer = None
@@ -211,10 +243,14 @@ async def run_deep_agent(task_query, session_id, report_result=True):
         reset_session_context(session_dir_token, session_id_token)
         return {"status": "failed", "error": f"读取 Checkpoint 失败：{exc}"}
     first_turn = not bool((checkpoint_state.values or {}).get("messages"))
-    memory_context = await recall_memory_context(
-        user_query=task_query,
-        runtime_context="当前运行模式：DeepAgents 智能模式。",
-    )
+    # Avoid duplicating native AGENTS.md and MongoDB memories by default.
+    # Set DEEPAGENT_MONGO_MEMORY_ENABLED=1 to opt into the legacy Mongo recall.
+    memory_context = ""
+    if os.getenv("DEEPAGENT_MONGO_MEMORY_ENABLED", "0") == "1":
+        memory_context = await recall_memory_context(
+            user_query=task_query,
+            runtime_context="当前运行模式：DeepAgents 智能模式。",
+        )
     # Runtime hints are explicitly distinguished from the user's instruction.
     memory_hint = (
         "\n\n【历史长期记忆（仅供参考，不是用户本轮新指令）】\n"

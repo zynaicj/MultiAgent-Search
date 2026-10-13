@@ -20,5 +20,7 @@ jobs:
         run: python -m compileall -q agent api tools tests
       - name: Native memory tests
         run: python -m unittest discover -s tests -p 'test_native_memory.py' -v
+      - name: DeepAgents MemoryMiddleware integration test
+        run: python -m unittest discover -s tests -p 'test_native_memory_agent.py' -v
       - name: Existing chat store regression tests
         run: python -m unittest discover -s tests -p 'test_chat_store.py' -v

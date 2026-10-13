@@ -58,7 +58,7 @@ class NativeMemoryManagementTest(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     await set_preference(store, "api_key", "should-not-store", "alice")
                 with self.assertRaises(ValueError):
-                    await set_preference(store, "abc", "line1\\nline2", "alice")
+                    await set_preference(store, "abc", "line1" + chr(10) + "line2", "alice")
 
     async def test_actual_deepagent_refreshes_same_thread_after_memory_changes(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,24 @@
+name: Native Memory Checks
+on:
+  push:
+    branches:
+      - feature/deepagents-native-memory
+  workflow_dispatch:
+
+jobs:
+  memory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install verified pinned memory libraries
+        run: |
+          pip install "deepagents==0.4.3" "langgraph-checkpoint-sqlite==3.1.1"
+      - name: Syntax compilation
+        run: python -m compileall -q agent api tools tests
+      - name: Native memory tests
+        run: python -m unittest discover -s tests -p 'test_native_memory.py' -v
+      - name: Existing chat store regression tests
+        run: python -m unittest discover -s tests -p 'test_chat_store.py' -v

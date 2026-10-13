@@ -1,6 +1,7 @@
 from agent.llm import memory_extractor_model
 from agent.memory.repository import memory_repository
 from agent.memory.schemas import MemoryRecallSelection
+from agent.memory.native import DEFAULT_USER_ID
 
 
 MEMORY_RECALL_PROMPT = """
@@ -174,7 +175,7 @@ MultiAgent-Search 的长期记忆使用 MongoDB 存储。
 structured_memory_recaller = memory_extractor_model.with_structured_output(MemoryRecallSelection, method="function_calling")
 
 
-async def recall_memories(query: str, runtime_context: str = "", limit: int = 5) -> list[dict]:
+async def recall_memories(query: str, runtime_context: str = "", limit: int = 5, user_id: str = DEFAULT_USER_ID, allowed_types: frozenset[str] | None = None) -> list[dict]:
     """
     根据当前用户问题和运行时上下文，
     召回真正相关的长期记忆。
@@ -186,7 +187,9 @@ async def recall_memories(query: str, runtime_context: str = "", limit: int = 5)
     if not query:
         return []
 
-    memories = await memory_repository.get_all_memories()
+    memories = await memory_repository.get_all_memories(user_id=user_id)
+    if allowed_types is not None:
+        memories = [m for m in memories if m.get("memory_type") in allowed_types]
 
     if not memories:
         return []
@@ -232,12 +235,12 @@ def format_memory_context(memories: list[dict]) -> str:
     return "\n".join(memory_lines)
 
 
-async def build_memory_context(query: str, runtime_context: str = "", limit: int = 5) -> str:
+async def build_memory_context(query: str, runtime_context: str = "", limit: int = 5, user_id: str = DEFAULT_USER_ID, allowed_types: frozenset[str] | None = None) -> str:
     """
     用户问题 + 运行时上下文
     -> 召回长期记忆
     -> 构造 Agent Memory Context。
     """
 
-    memories = await recall_memories(query=query, runtime_context=runtime_context, limit=limit)
+    memories = await recall_memories(query=query, runtime_context=runtime_context, limit=limit, user_id=user_id, allowed_types=allowed_types)
     return format_memory_context(memories)

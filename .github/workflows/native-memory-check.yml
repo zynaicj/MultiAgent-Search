@@ -27,5 +27,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_native_memory_management.py' -v
       - name: Hybrid memory policy and Mongo owner-scope tests
         run: python -m unittest discover -s tests -p 'test_hybrid_memory.py' -v
+      - name: DeepAgent hybrid-context checkpoint isolation test
+        run: python -m unittest discover -s tests -p 'test_hybrid_memory_agent.py' -v
       - name: Existing chat store regression tests
         run: python -m unittest discover -s tests -p 'test_chat_store.py' -v
